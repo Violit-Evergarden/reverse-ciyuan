@@ -210,3 +210,96 @@ adb shell "nohup /data/local/tmp/frida-server-16 >/data/local/tmp/fs16.log 2>&1 
 | `/tmp/ciyuan_home_channel_resp.pb` | 登录后首页 /channel 响应 protobuf(100 张 Wallpaper) |
 | `/tmp/dump4.js` `/tmp/spawn_dump_ctl.py` | 明文捕获 hook 与控制器 |
 | `/tmp/ciyuan_reverse_engineering_report.md` | 本报告 |
+
+---
+
+## 8. 签名算法完整复现 (2026-10-14, Windows 会话)
+
+> 本节是 HANDOFF 待办「实现签名(f8, MD5)的复现」的完成记录。
+> **SALT 字面量不入本仓库**（凭据纪律），存于 `web/secrets.local.json`（已 .gitignore）。
+
+### 8.1 算法结论
+
+```
+sign(input) = md5hex( md5hex( SALT + input ) )          # 双重 MD5, 小写 hex, SALT 前缀
+SALT: 32 字节可打印字符串, 静态存于 libhell.so (两处 TU 各一份 std::string 副本)
+```
+
+两条使用路径（同一 native 函数 `me.alzz.Hell.sign(String)` → `Java_me_alzz_Hell_native_1sign`）:
+
+| 路径 | input 组装 |
+|---|---|
+| HTTP JSON API (`/rank`,`/u/login`; 头 `t`+`sign`) | `{非空 query 参数(URL解码后), 非空 form 参数, "t=<ms>"} → 去重 → 字典序排序 → "&" 连接`（分隔符常量复用自 alipay SDK 混淆类 `a.f2893n = "&"`） |
+| `/channel` protobuf (`sg`=f8) | `hex( Channel 信封去掉 sg 字段后的规范化序列化字节 )`（`p035n.dQfJj.QQcLE` = 小写 hex） |
+
+### 8.2 提取方法 (可复现)
+
+1. **JADX 反编译** (jadx 1.5.6 + Temurin JDK 21, 均为便携版): `me/alzz/Hell.java` →
+   `sign/encrypt` 两个 native; 引用者仅两个混淆类:
+   - `p021h1/D0WjR.java` (Retrofit/okhttp 层): query/form/t 组装 + 排序去重 + `&` 连接 → `Hell.sign`
+   - `U0/H3NnV.java` (`dQfJj(GeneratedMessageV3)` = Channel 信封组装器): token/p/t/ua/v/vn/cd/sh/nd/mt/ij/req 全字段 → `build().toByteArray()` (不含 sg) → hex → `Hell.sign` → `setSg`
+2. **libhell.so 静态分析** (pyelftools + capstone, 未剥符号且带 DWARF —— dev 构建直接发布):
+   - `_ZL4SALT` ×2 @ .bss 0x58740/0x58760 (std::string 24B); 构造函数 `_GLOBAL__sub_I_hell.cpp`
+     @0x24f58 / `_GLOBAL__sub_I_jni_app.cpp` @0x2542c 从 **.rodata 0x166ce 拷贝 32 字节字面量**
+     (头部 {cap=0x31,size=32} @0x168f0), 即 SALT。
+   - `Java_me_alzz_Hell_native_1sign` @0x25164 (712B) 反汇编:
+     `isHookPMS(env)`/`hasMtHook(env)` 反 hook 检测(命中→返回 null) → `GetStringUTFChars` →
+     `std::string::insert(0, SALT)` **前插盐** → `MD5::ctor(str)` → `MD5::toStr()` → **再做一轮
+     MD5 ctor+toStr** → `NewStringUTF`。MD5 为自研 C++ 实现 (`/awsl/devil/src/main/cpp/md5.cpp`, 标准算法)。
+3. **离线验证**: 仓库内 5 组抓包样本 (rank / login / channel×3) 全部命中;
+   `python tools/ciyuan_channel_client.py verify` 可随时重验。
+
+### 8.3 Channel 信封字段号 (从 ChannelOuterClass.java 权威确认)
+
+```
+req=1(Any)  token=2  p=3(bool)  v=4(versionCode=102)  vn=5("2.11.5")  ua=6  t=7(ms)
+sg=8(sign)  cd=9(base64 cacheDir)  sh=10(APK证书MD5hex.hashCode()=1632386598)  nd=11(base64 nativeLibraryDir)
+mt=12(mthook文件存在)  ij=13(cloudinject存在)      Result: code=1 errmsg=2 rsp=3
+序列化: 按字段号升序; p/mt/ij=false 及空 token 不序列化; sg 计算时缺席, 发送时插在 f7/f9 之间。
+cd/nd 为设备路径 base64, 服务端不校验内容, 可直接复用抓包值 (web/server.js 内置)。
+```
+
+### 8.4 业务消息 (proto 类权威字段号)
+
+```
+LoadWallpaperReq { endTime=1(游标,INT64_MAX=最新) comic=2 landscape=3 pixivId=4 }   # 抓包中 f3=0 即 landscape
+LoadWallpaperRsp { wallpapers=1(repeated Wallpaper) }
+Wallpaper { id=1 author=2 isR16=3 pixivId=4 tags=5 thumbUrl=6 url=7 width=8 height=9
+            comic=10 characters=11 uploader=12 createdAt=13 }
+SearchWallpaperReq { endTime=1 keyword=2 author=3 pixivId=4 }   RandomWallpaper: message 名就是 Req/Rsp
+Comics: Comic{name=1,count=2,thumbUrl=3} ComicRsp{comics=1} ComicsReq
+```
+
+## 9. 协议级实测矩阵与 Web 版 (2026-10-14, 服务器实时验证)
+
+| 接口 | 结果 | 说明 |
+|---|---|---|
+| `GET /rank` (t+sign) | ✅ | 4 组 × 10; **裸请求(缺 sign)返回 `code:-2 "请升级至最新版"`** —— 该文案是签名校验失败的误导性报错 |
+| `POST /u/login` | ✅ | 响应 token 25 字符 |
+| `POST /channel` LoadWallpaperReq | ✅ | 100 条/页; 游标分页(上页末条 createdAt)正确 |
+| LoadWallpaperReq.comic 过滤 | ✅ | 服务端过滤, 100/100 命中 |
+| SearchWallpaperReq | 🔒 | `code=-5 "请先激活高级账户"` —— **搜索是 Pro 付费功能** (账号 isPro=false) |
+| RandomWallpaper `Req` / `ComicsReq` | ❌ | `code=-6 "请升级至最新版"` = 服务端不认识该 type_url, **已废弃** (type_url 无误: random_wallpaper.proto 的 message 名就是 Req) |
+
+**图片链路新发现**:
+- `pic1.imgdb.cn/i/*.webp` 缩略图 = **302 → `wkphoto.cdn.bcebos.com/*.jpg`(百度 CDN, 实为 jpeg)**;
+  目标站防盗链**认 Referer**: 带任何 Referer → 403, 不带 → 200 (imgdb 自身有 `Referrer-Policy: no-referrer` 佐证)。
+- `bitiful.cdn.13th.tech` 为 **http**(443 上是网宿共享证书, 域名不匹配); 需浏览器 UA; 原图 `*.a` XOR 解码验证通过 (8MB RIFF/WEBP, riff 长度自洽)。
+
+**Web 版交付**: `web/` (零 npm 依赖, Node≥18; server.js 协议网关 + public/ 单页前端; 详见 `web/README.md`)。
+新增工具: `tools/ciyuan_channel_client.py` (协议级客户端: verify/rank/login/feed, 离线签名验证),
+`tools/dump_headers.py` (HTTP/2 抓包完整头导出)。
+Live 验证数据: `data/ciyuan_channel_page1_live_20261014.json` (100 条实时首页流)。
+
+**字段/经验补充 (同日)**:
+- `Wallpaper.pixivId` 为 **string** 字段且语义混杂: 8~9 位纯数字 = pixiv 作品 ID; **32 位 hex = 站外源标识**
+  (rank 榜中占比不低)。APP 反编译全源码**无 `pixiv.net` 字符串** —— APP 从不外链 pixiv, 仅作元数据展示与
+  `LoadWallpaperReq.pixivId` 站内过滤。Web 版仅对纯数字 ID 生成外链并提示"原作可能已删除/转私有"。
+  (顺带修复 server.js 早期把 f4 按 varint 解析、JSON 输出 Buffer 对象的 bug —— 前端曾拼出
+  `pixiv.net/artworks/[object Object]` 导致 404。)
+- **公开仓库脱敏纪律** (上传 github.com/Violit-Evergarden/reverse-ciyuan 时执行):
+  `data/raw_login/` 含**明文账号密码**(req bin)、**明文 token+手机号+邮箱**(resp bin) → **不入库**
+  (.gitignore, 仅本地保留); `data/ciyuan_home_channel_req.pb` 与 `data/raw_page2/page2_req_channel.bin`
+  中的旧 token 等长替换为 `REDACTED_TOKEN_0123456789` (该两样本的 sg 离线校验随之作废, verify 自动 SKIP);
+  `web/secrets.local.json` (账号/SALT/token) 从不跟踪。
+  ⚠️ **历史提交 95b4537 已公开包含上述明文** —— 建议用户修改 APP 密码, 或用 git-filter-repo 重写历史后强推。
