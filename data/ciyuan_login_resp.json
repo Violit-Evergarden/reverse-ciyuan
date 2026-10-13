@@ -1,0 +1,12 @@
+{
+  "code": 0,
+  "msg": "",
+  "data": {
+    "phone": "<REDACTED>",
+    "id": "6041f984f8ac3a24dee9ce8b",
+    "email": "<REDACTED>",
+    "isPro": false,
+    "username": "埃尔文·史密斯",
+    "token": "<REDACTED>"
+  }
+}

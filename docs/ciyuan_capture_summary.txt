@@ -1,0 +1,60 @@
+次元壁纸 (me.alzz.awsl) 真实 API 抓包 — 最终结果
+==================================================
+捕获环境: Android 模拟器 ciyuan_aosp (arm64, Android 14) + Frida 16.7.19 spawn-gate,
+          hook Conscrypt 明文字节流 (SSLOutputStream.write / SSLInputStream.read),
+          按连接对象身份 (identityHashCode) 分组, 直接 dump TLS 解密后的 HTTP/2 明文。
+          (App 的 API 客户端代码级绕过系统代理直连; mitmproxy 代理/transparent 模式均不适用。)
+
+传输层
+------
+协议:   HTTP/2 over TLS, 单连接多路复用
+主机:   api.awsl.13th.tech  ->  39.108.98.138:443
+图片CDN: bitiful.cdn.13th.tech , pic1.imgdb.cn   (路径 /i/*.webp, /202610/*.webp)
+
+已捕获的接口
+------------
+1) POST /channel          content-type: application/x-protobuf
+     请求 body = me.alzz.awsl.proto.LoadWallpaperReq (413 B)
+        含: 版本 "2.11.5", UA 串, MD5 签名 f4fad66501753eedb429efa4ad4e656c, base64 路径串
+     响应 body = me.alzz.awsl.proto.Result (28 B): code=<负值>, message="请重新登录"
+     (未登录时 /channel 返回需登录; 但下面的 /rank 未登录也可用)
+
+2) GET /rank?token=       (未登录 token 为空)
+     响应 content-type: application/json, 26.5 KB  ← 壁纸排行数据源
+     结构:
+       { code:0, msg:"", data:{ items:[ { title, wallpapers:[ Wallpaper ] } ] } }
+       Wallpaper = { id, author, createdAt, pixivId, tags[], thumbUrl, updatedAt,
+                     url, width, height, uploader, md5, comic, characters[], isR16 }
+     本次抓到 4 组 × 10 张 = 40 张:
+       近7天壁纸排行 / 近7天锁屏排行 / 壁纸总榜 / 锁屏总榜
+
+3) GET /i/<hash>.webp     壁纸缩略图/原图 (image/webp), 例:
+       /i/034YvgiucmAO1kJSsvlg78.webp
+     已保存 1 张干净示例: ciyuan_sample_511bdb.webp
+
+交付文件
+--------
+/tmp/ciyuan_rank.json                    排行接口完整 JSON 响应 (40 张壁纸元数据+URL) ★数据源
+/tmp/ciyuan_channel_req.pb               /channel 请求 protobuf (LoadWallpaperReq, 413 B)
+/tmp/ciyuan_channel_resp.pb              /channel 响应 protobuf (Result, 28 B)
+/tmp/ciyuan_rank_http2_req_frames.bin    排行会话请求方向 HTTP/2 明文帧
+/tmp/ciyuan_rank_http2_resp_frames.bin   排行会话响应方向 HTTP/2 明文帧
+/tmp/ciyuan_sample_511bdb.webp           示例壁纸图 (webp)
+/tmp/ciyuan_http2_req_frames.bin         (首轮) /channel 请求帧
+/tmp/ciyuan_http2_resp_frames.bin        (首轮) /channel 响应帧
+/tmp/r3_*.bin /tmp/rank2_*.bin           分连接/分stream 中间产物
+
+复现抓取
+--------
+1. 启动模拟器: emulator -avd ciyuan_aosp -no-window -writable-system ...
+2. adb root; adb shell /data/local/tmp/frida-server-16 &
+3. /tmp/frida-venv/bin/python /tmp/spawn_dump_ctl.py /tmp/dump4.js <秒数> <前缀>
+4. 启动后点底部"排行" tab (坐标 160,610) 触发 /rank; 滚动/点"查看更多"触发更多。
+5. 解析: 见 /tmp 下解析脚本逻辑 (按 PRI preface 切连接、HPACK 解头、DATA 抽 body)。
+
+备注
+----
+- /rank 返回 JSON(非 protobuf), 字段为 camelCase; 与 Codex 逆向的 proto 数据模型一一对应
+  (thumb_url->thumbUrl, pixiv_id->pixivId 等)。
+- 要抓需登录态的接口(如 /channel 成功响应), 先在 App 内登录再按上述步骤抓; 登录请求本身
+  也会被同样方式捕获。
