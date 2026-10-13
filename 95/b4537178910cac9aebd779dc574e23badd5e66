@@ -1,0 +1,19 @@
+HANDOFF.md
+  s_e19b63cd15316e::t_96dd7f5a9d5e43 40-42
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.49-trip",
+  "base_commit_sha": "95b4537178910cac9aebd779dc574e23badd5e66",
+  "prompts": {},
+  "sessions": {
+    "s_e19b63cd15316e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2241d6f7-7fe0-4d89-8df2-d6c1285ae1a9",
+        "model": "qwen3.8-max"
+      },
+      "human_author": "qiaoyuanshi <qiaoyuanshi@trip.com>"
+    }
+  }
+}
