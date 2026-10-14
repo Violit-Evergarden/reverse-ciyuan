@@ -1,0 +1,67 @@
+.gitignore
+  s_61c1ffba966784::t_49ba2e746be298 5-6
+web/frontend/src/types.ts
+  s_61c1ffba966784::t_5fbe1d178a1865 1-19
+web/frontend/src/components/CatsView.tsx
+  s_61c1ffba966784::t_ddec13cfee9158 1-33
+web/frontend/src/components/FilterBar.tsx
+  s_61c1ffba966784::t_7f1bfb31f28a3f 1-49
+web/frontend/src/styles.css
+  s_61c1ffba966784::t_af2245e827602f 38-41,77,90
+web/frontend/package-lock.json
+  s_61c1ffba966784::t_49ba2e746be298 1-1750
+web/frontend/src/components/TopBar.tsx
+  s_61c1ffba966784::t_88a6fe36d113a8 1-57
+web/server.js
+  s_61c1ffba966784::t_aae06a6dcd7212 323-325
+  s_61c1ffba966784::t_35aac4eacfe66b 27-28
+web/frontend/src/components/RankView.tsx
+  s_61c1ffba966784::t_72e69bacc2333a 1-50
+web/frontend/package.json
+  s_61c1ffba966784::t_97b96b2fae8342 1-22
+web/frontend/src/api.ts
+  s_61c1ffba966784::t_66b17e50533a1b 1-26
+web/frontend/src/components/Toasts.tsx
+  s_61c1ffba966784::t_ace4cf2380ebf2 1-12
+web/frontend/src/masonry.ts
+  s_61c1ffba966784::t_7c6fc500173c3a 1-25
+web/frontend/src/components/ModalView.tsx
+  s_61c1ffba966784::t_fc841ed3e1bc77 80
+  s_61c1ffba966784::t_7c6020ce29cccf 1-2,4-79,81-95
+  s_61c1ffba966784::t_314e7386f49ee9 3
+web/README.md
+  s_61c1ffba966784::t_4f8ff94ab45303 38,40-44,46-56,59
+web/frontend/src/App.tsx
+  s_61c1ffba966784::t_1d4a040ddd8e7b 1-35
+web/frontend/src/components/HomeView.tsx
+  s_61c1ffba966784::t_aaec9d7f8e8fb7 1-86
+web/frontend/vite.config.ts
+  s_61c1ffba966784::t_e4a15a26da3fd0 1-10
+web/frontend/src/main.tsx
+  s_61c1ffba966784::t_f18ed013417e05 1-10
+web/frontend/public/manifest.webmanifest
+  s_61c1ffba966784::t_fef2a3280e2c98 1-13
+web/frontend/tsconfig.json
+  s_61c1ffba966784::t_6d744cff956a85 1-19
+web/frontend/src/store.ts
+  s_61c1ffba966784::t_414af4581fcf38 1-16,19-23,25-26,28-38,40-52,55,65,69,71-76,80,84,86-89,97-98,102,105,107,110-112,115-116,118,122,125,127,132-136,141,143-161,163-173,177,179
+  s_61c1ffba966784::t_a7e3b998e9ebfc 17
+web/frontend/index.html
+  s_61c1ffba966784::t_1ee878375cb2d4 5,7-15,19-20
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.49-trip",
+  "base_commit_sha": "e2edbb13801d1fd4d3eca9d57982b71a5dcc79e5",
+  "prompts": {},
+  "sessions": {
+    "s_61c1ffba966784": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "487d0a4a-1bb9-4f7f-bd4a-838c151ca894",
+        "model": "qwen3.8-max"
+      },
+      "human_author": "qiaoyuanshi <qiaoyuanshi@trip.com>"
+    }
+  }
+}
