@@ -1,0 +1,33 @@
+web/public/app.js
+  s_61c1ffba966784::t_9f3485542487f4 180,188,197,203
+  s_61c1ffba966784::t_61c314ea2b08cd 142
+  s_61c1ffba966784::t_e5b15f36d08e03 43
+  s_61c1ffba966784::t_a6fecca3d137fd 99-105
+  s_61c1ffba966784::t_fb5bf2410da631 1-10,17,19,38-39,44,50,53-67,69-71,74,136,138-139,141,144,146-174,179,186,212-217,222,224,285,304,311-313,316-317,327,369,373-375,379-380,387,393,410,412,415,426
+  s_61c1ffba966784::t_bb5719d059aa56 219
+  s_61c1ffba966784::t_944240178160e5 370
+  s_61c1ffba966784::t_19d3e33b3ac010 428-430
+web/public/index.html
+  s_61c1ffba966784::t_eba17a0495a0ff 6-7
+  s_61c1ffba966784::t_185b92a81432b9 34,36-38,47,50,56
+web/README.md
+  s_61c1ffba966784::t_41f33219a6779b 45-50
+web/public/style.css
+  s_61c1ffba966784::t_d5814db87b778a 85-103
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.49-trip",
+  "base_commit_sha": "d6463aa053f08faabfc2da351ec947a42b0ec415",
+  "prompts": {},
+  "sessions": {
+    "s_61c1ffba966784": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "487d0a4a-1bb9-4f7f-bd4a-838c151ca894",
+        "model": "qwen3.8-max"
+      },
+      "human_author": "qiaoyuanshi <qiaoyuanshi@trip.com>"
+    }
+  }
+}
