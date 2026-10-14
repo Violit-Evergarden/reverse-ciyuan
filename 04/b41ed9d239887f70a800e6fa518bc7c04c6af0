@@ -1,0 +1,30 @@
+web/frontend/src/store.ts
+  s_61c1ffba966784::t_7d0f1f002852c3 162-165,171-172,175
+  s_61c1ffba966784::t_b3665ea7376854 178-179,181-184,187-189,191-202
+web/frontend/src/styles.css
+  s_61c1ffba966784::t_2f70b4b836bd81 228-236
+web/frontend/src/orig.ts
+  s_61c1ffba966784::t_3ce2ea76e20fd5 1-2,8-9,12,14-26,33,41,45,48-50
+web/frontend/src/components/ModalView.tsx
+  s_61c1ffba966784::t_e736a2ad25d621 180
+  s_61c1ffba966784::t_7508d2eaa28324 34-36,45,52
+  s_61c1ffba966784::t_509fe0305a4388 3
+  s_61c1ffba966784::t_daa254586b5a78 24
+  s_61c1ffba966784::t_c9cb449f779630 92-100
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.49-trip",
+  "base_commit_sha": "04b41ed9d239887f70a800e6fa518bc7c04c6af0",
+  "prompts": {},
+  "sessions": {
+    "s_61c1ffba966784": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "487d0a4a-1bb9-4f7f-bd4a-838c151ca894",
+        "model": "qwen3.8-max"
+      },
+      "human_author": "qiaoyuanshi <qiaoyuanshi@trip.com>"
+    }
+  }
+}
