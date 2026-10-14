@@ -343,3 +343,10 @@ resize 仅列数/列宽变化时按 pool 原序重排。验证(无头浏览器 +
   `5ed707f645e7ff0008317888` 1035 条 (pixiv 源 1020); **618 条老数据 (2025-12-07~2026-07-02) 无 uploader
   字段** (该字段为后期新增), 其余为长尾普通用户 (各 1~38 条)。Web 端详情弹窗「策展账号」chip / 搜索框
   粘贴账号 ID 可在已加载池内过滤其转载。
+- **uploader ID → 昵称: 普通客户端不可得** (2026-10-14 实测): dex 消息全表仅 20 个 Req/Rsp, 用户系只有
+  `UserManage{GetUserInfoReq/Rsp, DeleteUser*, ForbidUser*}` 与 `Data.UserWallpaper`; `GetUserInfoReq`
+  经 `/channel` 实测 **code=-4 无权限**(管理员族, 与 Delete/Forbid 同级); HTTP 侧 `/u/info|get|profile|
+  other|wallpaper|list` 均 -2(无此路由); 消息表无任何公开 profile 消息 → APP 自身也不展示上传者昵称。
+  **可解码的账号信息**: 24hex ID = Mongo ObjectId, 前 4 字节大端 = 账号创建时间 (`curator_scan.py oid_created`,
+  如头号策展号 5ed707f6… = 2020-06-03 注册); 32hex 非 ObjectId 不可解。扫描同时导出
+  `data/curator_scan_<day>.json` (按账号聚合的结构化数据)。

@@ -11,11 +11,20 @@ markdown 报告。背景见 docs/ciyuan_reverse_engineering_report.md §10:
 import argparse
 import collections
 import datetime
+import json
 import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import ciyuan_channel_client as c
+
+
+def oid_created(up):
+    """24hex = Mongo ObjectId: 前 4 字节大端 = 创建时间戳; 32hex 非 ObjectId 无法解。"""
+    import re as _re
+    if not _re.fullmatch(r'[0-9a-f]{24}', up or ''):
+        return None
+    return datetime.datetime.utcfromtimestamp(int(up[:8], 16))
 
 
 def pixiv_link(pid):
@@ -66,8 +75,10 @@ def main():
     for up, ws in sorted(by.items(), key=lambda kv: -len(kv[1])):
         pix = sum(1 for w in ws if str(w.get('pixivId') or '').split('-')[0].isdigit())
         span = f"{datetime.date.fromtimestamp(min(w['createdAt'] for w in ws) / 1000)} ~ {datetime.date.fromtimestamp(max(w['createdAt'] for w in ws) / 1000)}"
+        created = oid_created(up)
+        meta = (f'账号创建(ObjectId 解码): {created:%Y-%m-%d}' if created else '账号创建: 不可解(32hex 非 ObjectId)')
         L += [f'## `{up}` — {len(ws)} 条 (pixiv 源 {pix}, 非 pixiv {len(ws) - pix})',
-              f'上传时间跨度: {span}',
+              f'{meta}; 上传跨度: {span}',
               f'',
               '| 作者(pixiv 画师) | 作品 | 日期 | 来源 |',
               '|---|---|---|---|']
@@ -77,10 +88,19 @@ def main():
         L.append('')
     os.makedirs(os.path.dirname(out), exist_ok=True)
     open(out, 'w', encoding='utf-8').write('\n'.join(L))
-    print(f'written: {out}', file=sys.stderr)
+    jout = (out[:-3] if out.endswith('.md') else out) + '.json'
+    json.dump({
+        'scanned': len(rows),
+        'oid_created': {up: (oid_created(up).strftime('%Y-%m-%d') if oid_created(up) else None) for up in by},
+        'by_uploader': {up: [{k: w.get(k) for k in ('id', 'author', 'comic', 'pixivId', 'createdAt', 'width', 'height')}
+                             for w in sorted(ws, key=lambda w: -w['createdAt'])] for up, ws in by.items()},
+    }, open(jout, 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
+    print(f'written: {out} / {jout}', file=sys.stderr)
     for up, ws in sorted(by.items(), key=lambda kv: -len(kv[1])):
         pix = sum(1 for w in ws if str(w.get('pixivId') or '').split('-')[0].isdigit())
-        print(f'{up}  n={len(ws):4d}  pixiv={pix:4d}')
+        cr = oid_created(up)
+        crs = cr.strftime('%Y-%m-%d') if cr else 'n/a(32hex)'
+        print(f'{up}  n={len(ws):4d}  pixiv={pix:4d}  created={crs}')
 
 
 if __name__ == '__main__':
