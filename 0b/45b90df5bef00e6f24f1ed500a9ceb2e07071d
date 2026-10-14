@@ -1,0 +1,22 @@
+web/frontend/src/components/ModalView.tsx
+  s_61c1ffba966784::t_72e4666a0f5b4e 14
+  s_61c1ffba966784::t_e7d391c7e22eb9 34-60
+  s_61c1ffba966784::t_02c1246935bb41 114-116
+  s_61c1ffba966784::t_37f8ec73d1ff3e 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.49-trip",
+  "base_commit_sha": "0b45b90df5bef00e6f24f1ed500a9ceb2e07071d",
+  "prompts": {},
+  "sessions": {
+    "s_61c1ffba966784": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "487d0a4a-1bb9-4f7f-bd4a-838c151ca894",
+        "model": "qwen3.8-max"
+      },
+      "human_author": "qiaoyuanshi <qiaoyuanshi@trip.com>"
+    }
+  }
+}
