@@ -1,0 +1,19 @@
+tools/web_verify.sh
+  s_61c1ffba966784::t_ef0f5c5e71f668 1-58
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.49-trip",
+  "base_commit_sha": "8d7da1b657d6ac66b1f70d2d80454c2c981de1c4",
+  "prompts": {},
+  "sessions": {
+    "s_61c1ffba966784": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "487d0a4a-1bb9-4f7f-bd4a-838c151ca894",
+        "model": "qwen3.8-max"
+      },
+      "human_author": "qiaoyuanshi <qiaoyuanshi@trip.com>"
+    }
+  }
+}
