@@ -150,9 +150,11 @@ function appendCards(list) { // 增量追加: 已显示的卡不移动
 function updateCountPill() {
   const pool = state.cache?.pool || [];
   const vis = pool.filter(visible).length;
-  $('#discover-count').innerHTML = vis === pool.length
+  const el = $('#discover-count');
+  el.innerHTML = vis === pool.length
     ? `已加载 <b>${pool.length}</b>`
-    : `<b>${vis}</b> / ${pool.length}`;
+    : `显示 <b>${vis}</b> / 已加载 ${pool.length}`;
+  el.title = vis === pool.length ? '' : '差额为被 R16 开关或过滤条件隐藏的条目';
 }
 
 // ---------- 过滤栏 (sticky, 过滤上下文的唯一可见载体) ----------
