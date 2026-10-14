@@ -157,8 +157,24 @@ export function toggleR16(v: boolean) {
   localStorage.setItem('ciyuan_hideR16', v ? '1' : '0');
   bump();
 }
-export const openModal = (w: Wallpaper) => { state.modal = w; bump(); };
-export const closeModal = () => { state.modal = null; bump(); };
+let modalPushed = false;
+export const openModal = (w: Wallpaper) => {
+  state.modal = w;
+  if (!modalPushed) { modalPushed = true; history.pushState({ cyModal: w.id }, ''); } // 详情页并入历史, 移动端返回手势可关弹窗
+  bump();
+};
+export const closeModal = () => {
+  if (!state.modal) return;
+  state.modal = null;
+  if (modalPushed) { modalPushed = false; history.back(); } // ✕/遮罩 关弹窗后同步历史栈, 不留多余条目
+  bump();
+};
+
+// 历史返回/前进: 移动端返回手势先关详情弹窗; scope/视图的 hash 仍由 hashchange → applyHash 处理
+window.addEventListener('popstate', () => {
+  if (modalPushed && state.modal) { modalPushed = false; state.modal = null; bump(); } // back 手势关弹窗
+  else if (!modalPushed && state.modal) { state.modal = null; bump(); } // 历史条目缺失兜底
+});
 
 // ---------- 路由 ----------
 export function applyHash(h: string) {

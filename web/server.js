@@ -338,7 +338,19 @@ button{padding:12px;border-radius:10px;border:0;background:linear-gradient(135de
 </style></head><body><form method="post" action="/gate">
 <h1>🌸 站点密码</h1><p class="e">${err}</p>
 <input type="password" name="code" placeholder="输入站点密码" autofocus autocomplete="current-password">
-<button type="submit">进入</button></form></body></html>`;
+<button type="submit">进入</button></form>
+<script>
+// fetch 提交 + replace 跳转: 不在历史里留下门禁页/POST 条目, 移动端返回手势不会回到输入框
+document.querySelector('form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const r = await fetch('/gate', { method: 'POST', body: new FormData(e.target) });
+  if (r.redirected || r.ok) location.replace('/');
+  else document.querySelector('.e').textContent = '密码不对, 再试一次';
+});
+// 带有效 cookie 落回本页 (如浏览器后退到缓存) → 直接放行
+fetch('/api/status').then((r) => { if (r.ok) location.replace('/'); }).catch(() => {});
+</script>
+</body></html>`;
 
 async function serveStatic(req, res, pathname) {
   let fp = path.join(PUBLIC_DIR, pathname === '/' ? 'index.html' : pathname);
@@ -371,7 +383,7 @@ const server = http.createServer(async (req, res) => {
         });
         return res.end();
       }
-      res.writeHead(401, { 'content-type': 'text/html; charset=utf-8' });
+      res.writeHead(401, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
       res.end(gateHtml('密码不对, 再试一次'));
     });
     return;
@@ -382,7 +394,7 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(401, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
       return res.end(b);
     }
-    res.writeHead(401, { 'content-type': 'text/html; charset=utf-8' });
+    res.writeHead(401, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
     return res.end(gateHtml(''));
   }
   try {

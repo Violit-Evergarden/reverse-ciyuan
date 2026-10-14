@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { thumbOf } from '../api';
 import { cardH, distribute, masonrySpec } from '../masonry';
 import { fetchPage, openModal, state, useV, visible } from '../store';
+import { ensureOrig } from '../orig';
 import type { Wallpaper } from '../types';
 import { FilterBar } from './FilterBar';
 
@@ -10,7 +11,7 @@ function Card({ w }: { w: Wallpaper }) {
   const [failed, setFailed] = useState(false);
   const ratio = (w.width && w.height) ? (w.height / w.width) : 1.414;
   return (
-    <div className="card" onClick={() => openModal(w)}>
+    <div className="card" onClick={() => openModal(w)} onPointerDown={() => { ensureOrig(w).catch(() => { /* 弹窗/下载时再报 */ }); }}>
       <div className="thumb-wrap" style={{ aspectRatio: `${(1 / ratio).toFixed(4)}` }}>
         {!loaded && !failed && <div className="skeleton" />}
         <img
