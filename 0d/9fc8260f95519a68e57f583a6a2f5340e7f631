@@ -1,0 +1,21 @@
+tools/deploy.sh
+  s_61c1ffba966784::t_4eb42ed9eee16c 1-35
+tools/deploy_init.sh
+  s_61c1ffba966784::t_f14824b05f76b6 1-82
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.49-trip",
+  "base_commit_sha": "0d9fc8260f95519a68e57f583a6a2f5340e7f631",
+  "prompts": {},
+  "sessions": {
+    "s_61c1ffba966784": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "487d0a4a-1bb9-4f7f-bd4a-838c151ca894",
+        "model": "qwen3.8-max"
+      },
+      "human_author": "qiaoyuanshi <qiaoyuanshi@trip.com>"
+    }
+  }
+}
