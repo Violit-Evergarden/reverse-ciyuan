@@ -1,0 +1,31 @@
+web/frontend/src/components/ModalView.tsx
+  s_61c1ffba966784::t_f0bfacd22031f8 96
+  s_61c1ffba966784::t_8ccdb645ef200b 85-87
+  s_61c1ffba966784::t_c8e35f75db6d4a 150
+  s_61c1ffba966784::t_ce28f6fd1db952 233-253
+  s_61c1ffba966784::t_73d99318ad98fc 108
+README.md
+  s_61c1ffba966784::t_074e8e32e902c2 76
+HANDOFF.md
+  s_61c1ffba966784::t_074e8e32e902c2 35-38
+docs/ciyuan_reverse_engineering_report.md
+  s_61c1ffba966784::t_074e8e32e902c2 353-395
+web/frontend/src/styles.css
+  s_61c1ffba966784::t_54d0ca901d50f9 191
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.49-trip",
+  "base_commit_sha": "a9e541848e599806407d795d87f3dfd532fb0b27",
+  "prompts": {},
+  "sessions": {
+    "s_61c1ffba966784": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "487d0a4a-1bb9-4f7f-bd4a-838c151ca894",
+        "model": "qwen3.8-max"
+      },
+      "human_author": "qiaoyuanshi <qiaoyuanshi@trip.com>"
+    }
+  }
+}
