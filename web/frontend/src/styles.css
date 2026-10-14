@@ -197,12 +197,6 @@ main { max-width: 1720px; margin: 0 auto; padding: 22px 22px calc(60px + env(saf
   border: 1px solid var(--line);
 }
 .modal-close:hover { background: var(--acc); }
-.modal-info-btn {
-  position: absolute; right: 14px; bottom: calc(14px + env(safe-area-inset-bottom)); z-index: 6;
-  width: 44px; height: 44px; border-radius: 50%; background: rgba(20, 25, 38, .85);
-  border: 1px solid var(--line); color: var(--text); display: none;
-  align-items: center; justify-content: center; font-size: 18px;
-}
 .zoom-hint {
   position: absolute; left: 50%; bottom: calc(16px + env(safe-area-inset-bottom)); transform: translateX(-50%);
   background: rgba(10, 13, 20, .72); border-radius: 999px; padding: 4px 12px; font-size: 12px; color: var(--text-dim);
@@ -231,9 +225,17 @@ main { max-width: 1720px; margin: 0 auto; padding: 22px 22px calc(60px + env(saf
 }
 .tag-chip:hover { color: #fff; border-color: var(--acc); background: rgba(124, 92, 255, .15); }
 .side-actions { display: flex; flex-direction: column; gap: 10px; margin-top: auto; }
+.btn {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 12px 18px; border-radius: 11px; font-size: 14px; font-weight: 600; transition: all .18s;
+}
+.btn-primary { background: var(--grad); color: #fff; }
+.btn-primary:hover { filter: brightness(1.15); transform: translateY(-1px); }
+.btn-ghost { border: 1px solid var(--line); color: var(--text-dim); background: var(--card); }
+.btn-ghost:hover { border-color: var(--acc); color: var(--text); }
+.btn:disabled { opacity: .5; pointer-events: none; }
 @media (max-width: 900px) {
   .modal-stage img { border-radius: 0; }
-  .modal-info-btn { display: flex; }
   .modal-side {
     top: auto; left: 0; right: 0; bottom: 0; width: 100%; max-height: 74vh;
     border-left: 0; border-top: 1px solid var(--line); border-radius: 18px 18px 0 0;

@@ -157,35 +157,49 @@ export function toggleR16(v: boolean) {
   localStorage.setItem('ciyuan_hideR16', v ? '1' : '0');
   bump();
 }
-let modalPushed = false;
 export const openModal = (w: Wallpaper) => {
   state.modal = w;
-  if (!modalPushed) { modalPushed = true; history.pushState({ cyModal: w.id }, ''); } // 详情页并入历史, 移动端返回手势可关弹窗
+  savedScroll = window.scrollY;
+  const base = (location.hash || '#/home').split('/w/')[0];
+  const target = `${base}/w/${w.id}`;
+  if (location.hash !== target) location.hash = target; // 哈希条目: 侧滑=同文档遍历, 零重载
   bump();
 };
 export const closeModal = () => {
   if (!state.modal) return;
   state.modal = null;
-  if (modalPushed) { modalPushed = false; history.back(); } // ✕/遮罩 关弹窗后同步历史栈, 不留多余条目
+  if ((location.hash || '').includes('/w/')) history.back(); // hashchange → applyHash 收尾
+  requestAnimationFrame(() => window.scrollTo(0, savedScroll));
   bump();
 };
-
-// 历史返回/前进: 移动端返回手势先关详情弹窗; scope/视图的 hash 仍由 hashchange → applyHash 处理
-window.addEventListener('popstate', () => {
-  if (modalPushed && state.modal) { modalPushed = false; state.modal = null; bump(); } // back 手势关弹窗
-  else if (!modalPushed && state.modal) { state.modal = null; bump(); } // 历史条目缺失兜底
-});
+let savedScroll = 0;
 
 // ---------- 路由 ----------
+// 哈希格式: #/home | #/cats | #/rank | #/comic/<名> | #/uploader/<ID> | #/search/<词>,
+// 详情弹窗追加后缀 /w/<壁纸ID> (同文档历史条目, 侧滑零重载)。
 export function applyHash(h: string) {
-  const sc = scopeFromHash(h);
+  const wi = h.indexOf('/w/');
+  const base = wi >= 0 ? h.slice(0, wi) : h;
+  const wId = wi >= 0 ? h.slice(wi + 3) : null;
+  const sc = scopeFromHash(base);
   if (sc) {
     if (scopeHash(state.scope) !== scopeHash(sc)) setScope(sc, { navigate: false });
-    else { state.view = 'home'; bump(); }
-  } else if (h === '#/cats') { state.view = 'cats'; bump(); void loadComics(); }
-  else if (h === '#/rank') { state.view = 'rank'; bump(); void loadRank(); }
+    else state.view = 'home';
+  } else if (base === '#/cats') { state.view = 'cats'; void loadComics(); }
+  else if (base === '#/rank') { state.view = 'rank'; void loadRank(); }
   else if (state.scope) setScope(null, { navigate: false });
-  else { state.view = 'home'; bump(); }
+  else state.view = 'home';
+  if (wId) {
+    let found: Wallpaper | null = null;
+    for (const c of state.caches.values()) {
+      found = c.pool.find((x) => x.id === wId) || null;
+      if (found) break;
+    }
+    state.modal = found; // 深链且池内无此图 → 视为关闭
+  } else {
+    state.modal = null;
+  }
+  bump();
 }
 
 // ---------- 启动 ----------

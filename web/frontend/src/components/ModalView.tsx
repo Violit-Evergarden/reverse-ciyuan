@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { thumbOf } from '../api';
-import { ensureOrig, getCachedOrig, setOrigProgCb } from '../orig';
+import { ensureOrig, getCachedOrig } from '../orig';
 import { closeModal, onSearch, setScope, state, toast, useV } from '../store';
 
 const fmtDate = (ms: number) => {
@@ -21,6 +21,7 @@ export function ModalView() {
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const pinch = useRef<{ d0: number; s0: number; mx: number; my: number } | null>(null);
   const moved = useRef(false);
+  const tapTimer = useRef<number | null>(null);
 
   // 预取 (卡片 pointerdown / 弹窗打开即开始, orig.ts 单一 in-flight): 真实进度 → 小圆盘;
   // 完成后 blob 在手 → 下载一次点击即分享。
@@ -30,7 +31,9 @@ export function ModalView() {
     setProg(null);
     setSheet(false);
     setTf({ s: 1, x: 0, y: 0 });
-    setOrigProgCb((p) => { if (!cancelled) setProg(p); });
+    setOrigUrl(null); // 杜绝背景残留上一张
+    blobRef.current = null;
+    const onProg = (p: { loaded: number; total: number }) => { if (!cancelled) setProg(p); };
     const cached = getCachedOrig(w.id);
     if (cached) {
       blobRef.current = cached;
@@ -39,14 +42,14 @@ export function ModalView() {
       setOrigState('ready');
     } else {
       setOrigState('loading');
-      ensureOrig(w).then((blob) => {
+      ensureOrig(w, onProg).then((blob) => {
         if (cancelled) return;
         blobRef.current = blob;
         setOrigUrl(URL.createObjectURL(blob));
         setOrigState('ready');
       }).catch(() => { if (!cancelled) setOrigState('error'); });
     }
-    return () => { cancelled = true; setOrigProgCb(null); };
+    return () => { cancelled = true; };
   }, [w]);
   useEffect(() => () => { if (origUrl) URL.revokeObjectURL(origUrl); }, [origUrl]);
   useEffect(() => {
@@ -86,9 +89,16 @@ export function ModalView() {
   const onPointerUp = (e: React.PointerEvent) => {
     pointers.current.delete(e.pointerId);
     if (pointers.current.size < 2) pinch.current = null;
-    if (pointers.current.size === 0 && !moved.current && tf.s === 1) setSheet((s) => !s); // 单击: 换信息弹层
+    if (pointers.current.size !== 0 || moved.current || tf.s !== 1) return;
+    // 单击/双击判别: 260ms 内第二次点按 → 缩放; 否则单击换弹层 (避免连点时开-关互相抵消)
+    if (tapTimer.current !== null) {
+      window.clearTimeout(tapTimer.current);
+      tapTimer.current = null;
+      setTf((t) => (t.s > 1 ? { s: 1, x: 0, y: 0 } : { s: 2.5, x: 0, y: 0 }));
+    } else {
+      tapTimer.current = window.setTimeout(() => { tapTimer.current = null; setSheet((s) => !s); }, 260);
+    }
   };
-  const onDouble = () => setTf((t) => (t.s > 1 ? { s: 1, x: 0, y: 0 } : { s: 2.5, x: 0, y: 0 }));
 
   if (!w) return null;
   const pixivNum = w.pixivId && /^\d{1,10}$/.test(String(w.pixivId));
@@ -147,7 +157,6 @@ export function ModalView() {
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
-        onDoubleClick={onDouble}
       >
         <img
           className={syncing ? 'loading-orig' : ''}
@@ -168,8 +177,7 @@ export function ModalView() {
           <div className="orig-hint"><span className="dot" /><span>原图加载失败（点下载重试）</span></div>
         )}
         <button className="modal-close" onClick={closeModal} title="关闭 (Esc)">✕</button>
-        <button className="modal-info-btn" onClick={() => setSheet((s) => !s)} title="信息 / 下载">ℹ</button>
-        {tf.s > 1 && <div className="zoom-hint">{tf.s.toFixed(1)}× · 双击还原</div>}
+        {tf.s > 1 && <div className="zoom-hint">{tf.s.toFixed(1)}× · 双击还原 · 单击看信息</div>}
       </div>
       <aside className={'modal-side' + (sheet ? ' open' : '')}>
         <div className="sheet-handle" onClick={() => setSheet(false)} />
