@@ -186,7 +186,8 @@ main { max-width: 1720px; margin: 0 auto; padding: 22px 22px calc(60px + env(saf
 /* ---------- 详情弹窗 (桌面: 右信息栏 / 移动: 全屏图 + 底部弹层) ---------- */
 .modal { position: fixed; inset: 0; z-index: 100; display: none; background: rgba(4, 6, 10, .82); backdrop-filter: blur(10px); }
 .modal.open { display: block; }
-.modal-stage { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; touch-action: none; }
+.modal-stage { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; touch-action: none; padding: 26px calc(340px + 26px) 26px 26px; }
+@media (max-width: 900px) { .modal-stage { padding: 0; } }
 .modal-stage img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 10px; box-shadow: 0 20px 80px rgba(0, 0, 0, .6); transition: opacity .3s; will-change: transform; }
 .modal-stage img.loading-orig { opacity: .55; }
 .modal-close {
@@ -224,7 +225,7 @@ main { max-width: 1720px; margin: 0 auto; padding: 22px 22px calc(60px + env(saf
   font-size: 12px; color: var(--text-dim); cursor: pointer; transition: all .15s;
 }
 .tag-chip:hover { color: #fff; border-color: var(--acc); background: rgba(124, 92, 255, .15); }
-.side-actions { display: flex; flex-direction: column; gap: 10px; margin-top: auto; }
+.side-actions { display: flex; flex-direction: column; gap: 10px; margin-top: auto; border-top: 1px dashed var(--line); padding-top: 14px; }
 .btn {
   display: flex; align-items: center; justify-content: center; gap: 8px;
   padding: 12px 18px; border-radius: 11px; font-size: 14px; font-weight: 600; transition: all .18s;

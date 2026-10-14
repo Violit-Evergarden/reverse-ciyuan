@@ -397,7 +397,7 @@ async function serveStatic(req, res, pathname) {
     if (st.isDirectory()) fp = path.join(fp, 'index.html');
     const buf = await fsp.readFile(fp);
     // vite 产物带内容哈希 → 长缓存; 其余 no-cache
-    const cc = pathname.startsWith('/assets/') ? 'public, max-age=31536000, immutable' : 'no-cache';
+    const cc = pathname.startsWith('/assets/') ? 'public, max-age=31536000, immutable' : (pathname === '/' || pathname === '/index.html' ? 'no-store' : 'no-cache');
     res.writeHead(200, { 'content-type': MIME[path.extname(fp)] || 'application/octet-stream', 'content-length': buf.length, 'cache-control': cc });
     res.end(buf);
   } catch { res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' }); res.end('404'); }
