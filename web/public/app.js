@@ -88,6 +88,7 @@ function matchQuery(w, q) {
     || (w.id || '').toLowerCase().startsWith(q)
     || (w.tags || []).some((t) => t.toLowerCase().includes(q))
     || (w.characters || []).some((t) => t.toLowerCase().includes(q))
+    || (w.uploader || '').toLowerCase().includes(q)
     || String(w.pixivId || '').includes(q);
 }
 const visible = (w) => !(state.hideR16 && w.isR16) && matchQuery(w, state.query);
@@ -140,7 +141,7 @@ function updateCountPill(n) {
   const hint = $('#search-hint');
   if (state.query) {
     hint.style.display = '';
-    hint.textContent = '本地过滤实时流（服务端搜索需 APP Pro 账户）；继续下滑可扩大搜索池';
+    hint.textContent = '本地过滤实时流（服务端搜索需 APP Pro 账户）；支持作者/作品/标签/角色/ID/策展账号 ID；下滑可扩大搜索池';
   } else hint.style.display = 'none';
   $('#comic-back').style.display = state.comic ? '' : 'none';
 }
@@ -267,10 +268,16 @@ function openModal(w) {
       ? `<a href="https://www.pixiv.net/artworks/${w.pixivId}" target="_blank" rel="noopener" title="原作可能已被删除或转为私有">${w.pixivId} ↗</a>`
       : `<span style="font-family:monospace;font-size:11px" title="非 pixiv 作品 ID(站外源标识)">${esc(String(w.pixivId))}</span>`) : '—'],
     ['上传日期', fmtDate(w.createdAt)],
+    ['策展账号', w.uploader
+      ? `<button class="tag-chip" data-up="${esc(w.uploader)}" title="过滤该账号转载 (已加载池内)">${esc(w.uploader.slice(0, 10))}…</button>`
+      : '—'],
     ['角色', (w.characters || []).map(esc).join('、') || '—'],
     ['ID', `<span style="font-family:monospace;font-size:11px">${esc(w.id)}</span>`],
   ];
   $('#m-rows').innerHTML = rows.map(([k, v]) => `<div class="side-row"><span class="k">${k}</span><span class="v">${v}</span></div>`).join('');
+  $('#m-rows').querySelectorAll('[data-up]').forEach((b) => {
+    b.onclick = () => { closeModal(); $('#search-input').value = b.dataset.up; onSearch(b.dataset.up); };
+  });
   $('#m-tags').innerHTML = (w.tags || []).map((t) => `<button class="tag-chip" data-tag="${esc(t)}">${esc(t)}</button>`).join('');
   $('#m-tags').querySelectorAll('.tag-chip').forEach((b) => {
     b.onclick = () => { closeModal(); $('#search-input').value = b.dataset.tag; onSearch(b.dataset.tag); };
