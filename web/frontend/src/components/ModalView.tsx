@@ -7,18 +7,30 @@ const fmtDate = (ms: number) => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
+// 原图 blob 单条缓存: 弹窗打开即后台预取, 使"下载"点击能在用户手势时效内调到 share()
+// (navigator.share 要求紧贴手势; 首次点击若现场 fetch 数秒会因手势过期被拒)
+let blobCache: { id: string; blob: Blob } | null = null;
+
 export function ModalView() {
   useV();
   const w = state.modal;
   const [origState, setOrigState] = useState<'loading' | 'ready' | 'error'>('loading');
-  const [dl, setDl] = useState<'idle' | 'packing'>('idle');
+  const [dl, setDl] = useState<'idle' | 'packing' | 'ready'>('idle');
   useEffect(() => {
     if (!w) return;
     setOrigState('loading');
+    setDl('idle');
     const pre = new Image();
     pre.onload = () => setOrigState('ready');
     pre.onerror = () => setOrigState('error');
     pre.src = origOf(w);
+    // 后台预取原图 blob (供下载按钮在手势时效内直接 share)
+    if (blobCache?.id !== w.id) {
+      blobCache = null;
+      fetch(origOf(w)).then((r) => (r.ok ? r.blob() : Promise.reject(new Error(String(r.status)))))
+        .then((blob) => { blobCache = { id: w.id, blob }; })
+        .catch(() => { /* 下载时再试 */ });
+    }
   }, [w]);
   useEffect(() => {
     const f = (e: KeyboardEvent) => { if (e.key === 'Escape') closeModal(); };
@@ -32,30 +44,41 @@ export function ModalView() {
 
   const pixivNum = w.pixivId && /^\d{1,10}$/.test(String(w.pixivId));
 
-  // iOS 主屏幕(standalone)模式无下载管理器 UI, <a download> 静默失败;
-  // 改为 fetch → 系统分享面板(存照片/文件/AirDrop), 普通浏览器回落 blob 下载。
+  // iOS 主屏幕(standalone)无下载管理器 UI, <a download> 静默失败 → 走系统分享面板;
+  // navigator.share 必须紧贴用户手势: blob 已缓存则当场 share, 否则本次点击只打包,
+  // 按钮转"点按保存"态, 第二次点击(新手势 + 秒回)必成功。
+  const shareOrDownload = async (blob: Blob) => {
+    const name = `${w.comic || 'ciyuan'}_${w.id.slice(0, 8)}.webp`;
+    const file = new File([blob], name, { type: 'image/webp' });
+    if (navigator.canShare?.({ files: [file] })) {
+      await navigator.share({ files: [file], title: w.comic || w.author || '次元壁纸' });
+    } else {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = name;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    }
+  };
   const downloadOrig = async () => {
-    if (dl !== 'idle') return;
+    if (dl === 'packing') return;
+    const cached = blobCache?.id === w.id ? blobCache.blob : null;
+    if (cached) {
+      try { await shareOrDownload(cached); } catch (e) {
+        if ((e as Error).name !== 'AbortError') toast('保存失败: ' + (e as Error).message, true);
+      }
+      return;
+    }
     setDl('packing');
     try {
       const r = await fetch(origOf(w));
       if (!r.ok) throw new Error(String(r.status));
       const blob = await r.blob();
-      const name = `${w.comic || 'ciyuan'}_${w.id.slice(0, 8)}.webp`;
-      const file = new File([blob], name, { type: 'image/webp' });
-      if (navigator.canShare?.({ files: [file] })) {
-        await navigator.share({ files: [file], title: w.comic || w.author || '次元壁纸' });
-      } else {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url; a.download = name;
-        document.body.appendChild(a); a.click(); a.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 5000);
-      }
+      blobCache = { id: w.id, blob };
+      setDl('ready'); // 手势已过期, 不强行 share; 等用户再点一次
     } catch (e) {
-      if ((e as Error).name !== 'AbortError') toast('下载失败: ' + (e as Error).message, true);
-    } finally {
       setDl('idle');
+      toast('下载失败: ' + (e as Error).message, true);
     }
   };
   const rows: [string, React.ReactNode][] = [
@@ -111,8 +134,8 @@ export function ModalView() {
             ))}
           </div>
           <div className="side-actions">
-            <button className="btn btn-primary" disabled={dl !== 'idle'} onClick={() => void downloadOrig()}>
-              {dl === 'packing' ? '⏳ 原图打包中…' : '⬇ 下载原图'}
+            <button className="btn btn-primary" disabled={dl === 'packing'} onClick={() => void downloadOrig()}>
+              {dl === 'packing' ? '⏳ 原图打包中…' : dl === 'ready' ? '💾 原图已就绪 · 点按保存' : '⬇ 下载原图'}
             </button>
             {pixivNum && (
               <a className="btn btn-ghost" href={`https://www.pixiv.net/artworks/${w.pixivId}`} target="_blank" rel="noopener" title="原作可能已被删除或转为私有">Pixiv 来源 ↗</a>

@@ -313,6 +313,33 @@ const img = (res, buf, type = 'image/webp', ttl = 86400 * 7) => {
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.webp': 'image/webp', '.ico': 'image/x-icon', '.json': 'application/json; charset=utf-8' };
 
+// ---------------- 站点门禁 (cookie 会话, 180 天) ----------------
+// 取代 nginx Basic Auth: iOS 上 Basic Auth 凭据仅存内存, 杀 Safari/web clip 即失效;
+// cookie 为持久化存储, 输一次密码后重启不再询问。凭据 = secrets.local.json 的 gate 字段。
+const GATE_DAYS = 180;
+const gateSecret = () => crypto.createHash('md5').update((SECRETS.gate || '') + '|ciyuan-gate').digest('hex');
+const gateHmac = (exp) => crypto.createHmac('sha256', gateSecret()).update(exp).digest('hex');
+function gateCookieOk(req) {
+  if (!SECRETS.gate) return true;
+  const m = /(?:^|;\s*)cy_gate=([^;]+)/.exec(req.headers.cookie || '');
+  if (!m) return false;
+  const [exp, sig] = decodeURIComponent(m[1]).split('.');
+  return !!sig && sig === gateHmac(exp) && Number(exp) > Date.now();
+}
+const gateHtml = (err) => `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>站点密码</title><style>
+body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0b0e14;color:#e8ecf4;font-family:system-ui,-apple-system,sans-serif}
+form{background:#161b27;border:1px solid #232b3d;border-radius:16px;padding:28px 26px;display:flex;flex-direction:column;gap:14px;width:min(320px,86vw)}
+h1{font-size:17px;margin:0;text-align:center}
+input{padding:12px 14px;border-radius:10px;border:1px solid #232b3d;background:#11151f;color:#e8ecf4;font-size:15px;outline:none}
+button{padding:12px;border-radius:10px;border:0;background:linear-gradient(135deg,#7c5cff,#ff5ca8);color:#fff;font-size:15px;font-weight:600}
+.e{color:#ff4d6a;font-size:12.5px;text-align:center;min-height:16px;margin:0}
+</style></head><body><form method="post" action="/gate">
+<h1>🌸 站点密码</h1><p class="e">${err}</p>
+<input type="password" name="code" placeholder="输入站点密码" autofocus autocomplete="current-password">
+<button type="submit">进入</button></form></body></html>`;
+
 async function serveStatic(req, res, pathname) {
   let fp = path.join(PUBLIC_DIR, pathname === '/' ? 'index.html' : pathname);
   if (!fp.startsWith(PUBLIC_DIR)) { res.writeHead(403); return res.end(); }
@@ -330,6 +357,34 @@ async function serveStatic(req, res, pathname) {
 const server = http.createServer(async (req, res) => {
   const u = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   const p = u.pathname;
+  // 门禁: POST /gate 校验密码发 cookie; 其余请求无 cookie 时拦截
+  if (p === '/gate' && req.method === 'POST') {
+    let body = '';
+    req.on('data', (c) => { body += c; });
+    req.on('end', () => {
+      const code = new URLSearchParams(body).get('code') || '';
+      if (SECRETS.gate && code === SECRETS.gate) {
+        const exp = String(Date.now() + GATE_DAYS * 86400e3);
+        res.writeHead(302, {
+          'set-cookie': `cy_gate=${exp}.${gateHmac(exp)}; Path=/; Max-Age=${GATE_DAYS * 86400}; HttpOnly; Secure; SameSite=Lax`,
+          location: '/',
+        });
+        return res.end();
+      }
+      res.writeHead(401, { 'content-type': 'text/html; charset=utf-8' });
+      res.end(gateHtml('密码不对, 再试一次'));
+    });
+    return;
+  }
+  if (!gateCookieOk(req)) {
+    if (p.startsWith('/api/')) {
+      const b = Buffer.from(JSON.stringify({ code: 401, msg: '未通过站点门禁' }), 'utf8');
+      res.writeHead(401, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+      return res.end(b);
+    }
+    res.writeHead(401, { 'content-type': 'text/html; charset=utf-8' });
+    return res.end(gateHtml(''));
+  }
   try {
     if (p === '/api/rank') {
       const data = await cacheWrap('rank', 10 * 60e3, apiRank);

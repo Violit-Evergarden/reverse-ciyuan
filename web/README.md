@@ -72,15 +72,20 @@ dev：`cd web/frontend && npm run dev` → 5173，/api 代理 8787；构建：`n
 
 - 服务器: Lighthouse 上海 4C4G Ubuntu 22.04; 入口 **https://www.violet37.cn**
   (复用该机已有 Let's Encrypt 证书, certbot 自动续期; nginx 1.18 需用 `listen 443 ssl http2;`)。
-- 架构: nginx(Basic Auth + TLS) → `127.0.0.1:8787` node server.js (systemd `ciyuan-web`) → 伺服 `web/dist`。
+- 架构: nginx(TLS) → `127.0.0.1:8787` node server.js (systemd `ciyuan-web`) → 伺服 `web/dist`。
+- 门禁: **cookie 会话**(180 天 HttpOnly), 密码 = secrets 的 `gate` 字段, `POST /gate` 换 cookie;
+  取代 nginx Basic Auth —— iOS 上 Basic Auth 凭据仅存内存, 杀 Safari/web clip 即失效, cookie 则持久化。
+  前端遇 API 401 自动跳 `/gate`。
 - 日常两条命令: `bash tools/web_verify.sh && bash tools/deploy.sh`
   (deploy.sh 读 **web/deploy.local.json** — gitignored: target/domain/Basic Auth 凭据)。
 - 一次性初始化: `tools/deploy_init.sh <域名> <basic_user> <basic_pass>` (包/systemd/nginx/htpasswd/certbot, 幂等)。
-- 安全: SSH 仅密钥 (`PasswordAuthentication no`); 上游账号凭据服务器端 `secrets.local.json` 权限 600;
-  Basic Auth 与 SSH 目标信息均只存 gitignored 文件。
+- 安全: SSH 仅密钥 (`PasswordAuthentication no`); 上游账号凭据与门禁密码均在 `secrets.local.json` (服务器端 600);
+  SSH 目标/门禁密码另存 gitignored `web/deploy.local.json` 供 deploy.sh 使用。
 - 旧服务 video-to-text / claw-agents / 3 个旧 nginx 站点已停删 (备份 `/root/old-backup-20261014.tgz`);
   mihomo 代理保留。
-- iOS: Safari 打开入口 → 分享 → 添加到主屏幕 (standalone 全屏, 图标/安全区已适配); Basic Auth 首次弹窗后由系统记住。
+- iOS: Safari 打开入口 → 输一次门禁密码 → 分享 → 添加到主屏幕 (standalone 全屏, 图标/安全区已适配);
+  门禁 cookie 持久化, 杀掉 clip 重开不再问。下载原图走 fetch→系统分享面板 (standalone 无下载 UI),
+  弹窗打开即预取原图 blob 保证分享手势时效。
 
 ## 合规
 

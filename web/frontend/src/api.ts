@@ -7,6 +7,7 @@ export class ApiError extends Error {
 
 async function api<T>(path: string): Promise<T> {
   const r = await fetch(path);
+  if (r.status === 401) { location.assign('/gate'); throw new ApiError(401, '站点门禁已过期'); }
   const j = await r.json();
   if (j.code !== 0) throw new ApiError(j.code, j.msg || `API 错误 (${j.code})`);
   return j as T;

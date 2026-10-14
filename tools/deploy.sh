@@ -9,11 +9,11 @@ CFG="$ROOT/web/deploy.local.json"
 if [ -f "$CFG" ]; then
   TARGET="${1:-$(python3 -c "import json;print(json.load(open('$CFG'))['target'])")}"
   DOMAIN="${2:-$(python3 -c "import json;print(json.load(open('$CFG'))['domain'])")}"
-  BASIC="$(python3 -c "import json;d=json.load(open('$CFG'));print(d['basic_user']+':'+d['basic_pass'])")"
+  GATE="$(python3 -c "import json;print(json.load(open('$CFG')).get('gate',''))")"
 else
   TARGET="${1:?用法: bash tools/deploy.sh <user@host> <域名>}"
   DOMAIN="${2:?缺域名}"
-  BASIC="${CIYUAN_BASIC:-}"
+  GATE="${CIYUAN_GATE:-}"
 fi
 APP_DIR=/opt/ciyuan/web
 
@@ -34,12 +34,17 @@ echo "== 远端重启 =="
 ssh "$TARGET" "systemctl restart ciyuan-web && sleep 1 && systemctl is-active ciyuan-web"
 
 echo "== 健康检查 =="
-AUTH=(); [ -n "$BASIC" ] && AUTH=(-u "$BASIC")
+CURLA=()
+if [ -n "$GATE" ]; then
+  JAR=$(mktemp); trap 'rm -f "$JAR"' EXIT
+  curl -sc "$JAR" -m 10 -d "code=$GATE" "https://$DOMAIN/gate" >/dev/null
+  CURLA=(-b "$JAR")
+fi
 for _ in $(seq 1 20); do
-  code=$(curl -s -m 8 "${AUTH[@]+"${AUTH[@]}"}" -o /dev/null -w '%{http_code}' "https://$DOMAIN/api/status" || true)
+  code=$(curl -s -m 8 "${CURLA[@]+"${CURLA[@]}"}" -o /dev/null -w '%{http_code}' "https://$DOMAIN/api/status" || true)
   [ "$code" = "200" ] && break
   sleep 1
 done
 [ "$code" = "200" ] || { echo "!! https://$DOMAIN/api/status 非 200 ($code)"; exit 1; }
-curl -s -m 8 "${AUTH[@]+"${AUTH[@]}"}" "https://$DOMAIN/api/status"; echo
+curl -s -m 8 "${CURLA[@]+"${CURLA[@]}"}" "https://$DOMAIN/api/status"; echo
 echo "== 部署完成: https://$DOMAIN =="
