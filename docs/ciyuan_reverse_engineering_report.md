@@ -313,3 +313,28 @@ resize 仅列数/列宽变化时按 pool 原序重排。验证(无头浏览器 +
   中的旧 token 等长替换为 `REDACTED_TOKEN_0123456789` (该两样本的 sg 离线校验随之作废, verify 自动 SKIP);
   `web/secrets.local.json` (账号/SALT/token) 从不跟踪。
   ⚠️ **历史提交 95b4537 已公开包含上述明文** —— 建议用户修改 APP 密码, 或用 git-filter-repo 重写历史后强推。
+
+## 10. 壁纸来源与策展模型分析 (2026-10-14)
+
+统计口径: live 首页 100 条 (`data/ciyuan_channel_page1_live_20261014.json`) + rank 40 条。
+
+- **pixivId 三类语义**: ① 纯数字 = pixiv 作品 ID (live 81 / rank 28); ② `<作品ID>-<页码>` =
+  多图投稿的第 N 页 (live 12 / rank 2, 页码自 1); ③ 32hex = 站外源标识 (live 8 / rank 10)。
+  → **pixiv 来源占比 ≈ 93/100 (首页流)、30/40 (rank)**。
+- **`-N` 页码语义已线上实锤**: `pixivId=141694730-2` ↔ pixiv `/artworks/141694730` 为 2 页投稿 (页面计数 1/2),
+  APP author=Ankry 与 pixiv 画师一致; `112019081` ↔ Okkimon 一致。APP 的 tags/characters 比 pixiv 原标签更细
+  (策展人补的角色/服饰标签)。
+- **author = pixiv 画师; uploader = APP 账号 ID** (Mongo ObjectId 风 24hex 或 32hex), 140 条中 author==uploader
+  为 **0** → 全部为转载/导入, 无画师本人投稿。
+- **uploader 集中度**: 140 条仅 15 个不同 uploader, 单账号 `5ed707f645e7ff0008317888` 占 **94 条**
+  (live 首屏前若干条全属它) → **少数策展/运营账号批量导入**, 非社区 UGC。结合 APP 反编译全无 `pixiv.net`
+  字符串: 采集与策展发生在服务端/策展工具链, APP 与 Web 只是元数据消费端; 图片转存自有 CDN
+  (imgdb/bcebos/bitiful), 不热链 pixiv。
+- **32hex 类 (无 pixiv 来源) 特征**: author/tags 多为空、元数据稀疏; comic 集中于国产 IP (原神/鸣潮/龙族);
+  分辨率常为官方壁纸规格 (3840×2160、4096×2748、3296×5120); 与 md5(url/thumbUrl/id/author) 均不匹配 (0/18)
+  → 系 APP 后端的**站外源标识** (官方壁纸包/国内平台等), 无后端权限下无法离线解析原始站点。
+- **默认流质量高的原因**: 人工策展转载 pixiv 高人气作品 + 元数据增补, 与 pixiv 官方入口无关。
+  pixiv 侧对照: 官方排行 `www.pixiv.net/ranking.php` (daily/weekly/monthly/rookie/original/AI 及 R-18 各档)、
+  官方策展杂志 **pixivision**、标签搜索+人气顺(premium)/宽高比筛选; **pixiv 无官方"壁纸"垂直站或 tab** ——
+  本 APP 实质上即"pixiv 壁纸策展前端" (转存图 + 尺寸元数据 + 站内策展榜)。
+- **APP 榜 ≠ pixiv 榜**: `/rank` 为站内指标 4 组 (壁纸/锁屏 × 近7天/总榜), 与 pixiv ranking 无对应关系。
