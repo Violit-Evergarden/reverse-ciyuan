@@ -1,0 +1,19 @@
+CLAUDE.md
+  s_e19b63cd15316e::t_e74721eb6ae9dc 1-20
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.49-trip",
+  "base_commit_sha": "8e24a382aa6005971a1f7377eaadd99300bc07fe",
+  "prompts": {},
+  "sessions": {
+    "s_e19b63cd15316e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2241d6f7-7fe0-4d89-8df2-d6c1285ae1a9",
+        "model": "qwen3.8-max"
+      },
+      "human_author": "qiaoyuanshi <qiaoyuanshi@trip.com>"
+    }
+  }
+}
