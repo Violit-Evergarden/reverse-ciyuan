@@ -347,3 +347,7 @@ main { max-width: 1720px; margin: 0 auto; padding: 22px 22px calc(60px + env(saf
 .ring-bg { fill:none; stroke:rgba(255,255,255,.15); stroke-width:3; }
 .ring-fg { fill:none; stroke:#7c5cff; stroke-width:3; stroke-linecap:round; transition:stroke-dashoffset .15s linear; }
 .orig-ring span { font-size:12px; color:#e8ecf4; font-variant-numeric:tabular-nums; }
+
+/* 切图淡入 */
+@keyframes modalimg { from { opacity: .35; } }
+.modal-stage img { animation: modalimg .18s ease; }

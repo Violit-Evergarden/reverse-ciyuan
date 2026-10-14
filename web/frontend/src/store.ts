@@ -157,12 +157,16 @@ export function toggleR16(v: boolean) {
   localStorage.setItem('ciyuan_hideR16', v ? '1' : '0');
   bump();
 }
-export const openModal = (w: Wallpaper) => {
+export const openModal = (w: Wallpaper, opts?: { replace?: boolean }) => {
   state.modal = w;
   savedScroll = window.scrollY;
   const base = (location.hash || '#/home').split('/w/')[0];
   const target = `${base}/w/${w.id}`;
-  if (location.hash !== target) location.hash = target; // 哈希条目: 侧滑=同文档遍历, 零重载
+  if (location.hash !== target) {
+    // 左右滑切图用 replace: 不污染历史栈 (一次返回仍回列表)
+    if (opts?.replace) location.replace(target);
+    else location.hash = target;
+  }
   bump();
 };
 export const closeModal = () => {

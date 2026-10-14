@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { thumbOf } from '../api';
 import { ensureOrig, getCachedOrig } from '../orig';
-import { closeModal, onSearch, setScope, state, toast, useV } from '../store';
+import { closeModal, onSearch, openModal, setScope, state, toast, useV, visible } from '../store';
 
 const fmtDate = (ms: number) => {
   const d = new Date(ms);
@@ -82,10 +82,18 @@ export function ModalView() {
     document.body.style.overflow = w ? 'hidden' : '';
   }, [w]);
 
-  // ---------- 捏合缩放 / 拖动 / 单击换弹层 ----------
+  // ---------- 手势: 捏合缩放 / 放大后拖动 / 单击弹层 / 横滑切图 / 下滑关闭 ----------
+  const start = useRef<{ x: number; y: number } | null>(null);
+  const navigate = (dir: 1 | -1) => {
+    const list = state.cache.pool.filter(visible);
+    const i = list.findIndex((x) => x.id === w?.id);
+    const t = i >= 0 ? list[i + dir] : undefined;
+    if (t) openModal(t, { replace: true }); // replace: 切图不污染历史栈
+  };
   const onPointerDown = (e: React.PointerEvent) => {
-    (e.target as Element).setPointerCapture?.(e.pointerId);
+    try { (e.target as Element).setPointerCapture?.(e.pointerId); } catch { /* 合成/无效 pointerId: 忽略捕获 */ }
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    start.current = { x: e.clientX, y: e.clientY };
     moved.current = false;
     if (pointers.current.size === 2) {
       const [a, b] = [...pointers.current.values()];
@@ -110,15 +118,55 @@ export function ModalView() {
   const onPointerUp = (e: React.PointerEvent) => {
     pointers.current.delete(e.pointerId);
     if (pointers.current.size < 2) pinch.current = null;
-    if (pointers.current.size !== 0 || moved.current || tf.s !== 1) return;
-    // 单击/双击判别: 260ms 内第二次点按 → 缩放; 否则单击换弹层 (避免连点时开-关互相抵消)
-    if (tapTimer.current !== null) {
-      window.clearTimeout(tapTimer.current);
-      tapTimer.current = null;
-      setTf((t) => (t.s > 1 ? { s: 1, x: 0, y: 0 } : { s: 2.5, x: 0, y: 0 }));
-    } else {
-      tapTimer.current = window.setTimeout(() => { tapTimer.current = null; setSheet((s) => !s); }, 260);
+    const st = start.current;
+    start.current = null;
+    if (pointers.current.size !== 0 || !st) return;
+    const dx = e.clientX - st.x, dy = e.clientY - st.y;
+    if (Math.abs(dx) < 8 && Math.abs(dy) < 8) {
+      // 单击/双击判别: 260ms 内第二次点按 → 缩放; 否则单击换弹层 (避免连点开-关互相抵消)
+      if (tapTimer.current !== null) {
+        window.clearTimeout(tapTimer.current);
+        tapTimer.current = null;
+        setTf((t) => (t.s > 1 ? { s: 1, x: 0, y: 0 } : { s: 2.5, x: 0, y: 0 }));
+      } else {
+        tapTimer.current = window.setTimeout(() => { tapTimer.current = null; setSheet((s) => !s); }, 260);
+      }
+      return;
     }
+    if (tf.s !== 1) return; // 放大态: 本次是拖动
+    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.4) { navigate(dx < 0 ? 1 : -1); return; } // 左滑下一张 / 右滑上一张
+    if (dy > 60 && Math.abs(dy) > Math.abs(dx) * 1.4) { // 下滑: 先收弹层, 再关详情
+      if (sheet) setSheet(false);
+      else closeModal();
+    }
+  };
+
+  // ---------- 底部弹层: 把手/顶部下拉关闭 (跟手拖拽, 松手判定) ----------
+  const sheetRef = useRef<HTMLElement | null>(null);
+  const drag = useRef({ y0: 0, dy: 0, on: false });
+  const onSheetDown = (e: React.PointerEvent) => {
+    const el = sheetRef.current;
+    if (!el) return;
+    const onHandle = (e.target as HTMLElement).classList.contains('sheet-handle');
+    if (!onHandle && el.scrollTop > 4) return; // 弹层内已滚动时不劫持
+    drag.current = { y0: e.clientY, dy: 0, on: true };
+    try { el.setPointerCapture?.(e.pointerId); } catch { /* 合成/无效 pointerId */ }
+    el.style.transition = 'none';
+  };
+  const onSheetMove = (e: React.PointerEvent) => {
+    if (!drag.current.on || !sheetRef.current) return;
+    const dy = Math.max(0, e.clientY - drag.current.y0);
+    drag.current.dy = dy;
+    sheetRef.current.style.transform = `translateY(${dy}px)`;
+  };
+  const onSheetUp = () => {
+    if (!drag.current.on || !sheetRef.current) return;
+    drag.current.on = false;
+    const el = sheetRef.current;
+    el.style.transition = '';
+    el.style.transform = '';
+    if (drag.current.dy > 90) setSheet(false);
+    drag.current.dy = 0;
   };
 
   if (!w) return null;
@@ -180,6 +228,7 @@ export function ModalView() {
         onPointerUp={onPointerUp}
       >
         <img
+          key={w.id}
           className={syncing ? 'loading-orig' : ''}
           src={origUrl || thumbOf(w)}
           alt=""
@@ -200,7 +249,14 @@ export function ModalView() {
         <button className="modal-close" onClick={closeModal} title="关闭 (Esc)">✕</button>
         {tf.s > 1 && <div className="zoom-hint">{tf.s.toFixed(1)}× · 双击还原 · 单击看信息</div>}
       </div>
-      <aside className={'modal-side' + (sheet ? ' open' : '')}>
+      <aside
+        ref={sheetRef}
+        className={'modal-side' + (sheet ? ' open' : '')}
+        onPointerDown={onSheetDown}
+        onPointerMove={onSheetMove}
+        onPointerUp={onSheetUp}
+        onPointerCancel={onSheetUp}
+      >
         <div className="sheet-handle" onClick={() => setSheet(false)} />
         <h2>{w.comic || w.author || '壁纸'}</h2>
         <div>
@@ -209,7 +265,7 @@ export function ModalView() {
           ))}
         </div>
         <div className="tag-cloud">
-          {w.tags.map((t) => (
+          {w.tags.filter((t) => t.trim()).map((t) => (
             <button
               className="tag-chip"
               key={t}

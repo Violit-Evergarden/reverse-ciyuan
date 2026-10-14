@@ -110,13 +110,13 @@ function parseWallpapers(rspValue) { // LoadWallpaperRsp{ f1: repeated Wallpaper
         case 2: w.author = str(g.v); break;
         case 3: w.isR16 = num(g.v) !== 0; break;
         case 4: w.pixivId = g.wt === 2 ? str(g.v) : num(g.v); break; // proto 里是 string 字段(可能是 pixiv 数字 ID, 也可能是 32 位 hex 外部 ID)
-        case 5: w.tags.push(str(g.v)); break;
+        case 5: { const tg = str(g.v); if (tg.trim()) w.tags.push(tg); break; } // 上游存在空标签脏数据
         case 6: w.thumbUrl = str(g.v); break;
         case 7: w.url = str(g.v); break;
         case 8: w.width = num(g.v); break;
         case 9: w.height = num(g.v); break;
         case 10: w.comic = str(g.v); break;
-        case 11: w.characters.push(str(g.v)); break;
+        case 11: { const ch = str(g.v); if (ch.trim()) w.characters.push(ch); break; }
         case 12: w.uploader = str(g.v); break;
         case 13: w.createdAt = num(g.v); break;
       }
