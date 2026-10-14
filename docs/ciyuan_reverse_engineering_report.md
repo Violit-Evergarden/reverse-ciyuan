@@ -291,6 +291,16 @@ Comics: Comic{name=1,count=2,thumbUrl=3} ComicRsp{comics=1} ComicsReq
 `tools/dump_headers.py` (HTTP/2 抓包完整头导出)。
 Live 验证数据: `data/ciyuan_channel_page1_live_20261014.json` (100 条实时首页流)。
 
+**Web 瀑布流视觉顺序修复 (2026-10-14)**: 初版前端用 CSS multi-column 做瀑布流 (`columns: 5 280px`),
+但多列布局是**列优先**填充 —— 5 列时第 1 列装数据第 1–20 条、第 2 列 21–40 条……首屏横读一行实为第
+1/21/41/60/79 条; 且每次 append 新页, 浏览器对全容器重新均衡列高, **已显示的卡片整体跳位**。
+APP 为竖向 StaggeredGrid(行优先、每条放入当前最矮列), 两者视觉顺序完全不一致(数据顺序本身一致:
+`/channel` 响应 createdAt 严格降序, 请求与真机抓包同构 `LoadWallpaperReq{f1=INT64_MAX, f3=0}`)。
+修复: `app.js masonrySpec/buildLayout/placeCard` 自维护 N 列容器(≤900px 2 列, 桌面 2–5 列),
+卡高由数据 `width/height` 先算(aspect-ratio 内联, 图加载不回流), 新卡入累计高度最矮列、只追加不重排,
+resize 仅列数/列宽变化时按 pool 原序重排。验证(无头浏览器 + stub 注入 live 100 条): 桌面首行=数据
+第 1..n 条、100 条各落位一次、列高差 3%; 2 列断点视觉序严格 1,2,3…。空态 `column-span:all` 随之移除。
+
 **字段/经验补充 (同日)**:
 - `Wallpaper.pixivId` 为 **string** 字段且语义混杂: 8~9 位纯数字 = pixiv 作品 ID; **32 位 hex = 站外源标识**
   (rank 榜中占比不低)。APP 反编译全源码**无 `pixiv.net` 字符串** —— APP 从不外链 pixiv, 仅作元数据展示与

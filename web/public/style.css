@@ -87,10 +87,12 @@ main { max-width: 1720px; margin: 0 auto; padding: 22px 22px 60px; }
 .back-btn { color: var(--text-dim); font-size: 13.5px; padding: 7px 14px; border-radius: 9px; border: 1px solid var(--line); transition: all .15s; }
 .back-btn:hover { color: var(--text); border-color: var(--acc); }
 
-/* ---------- 瀑布流 ---------- */
-.masonry { columns: 5 280px; column-gap: 14px; }
+/* ---------- 瀑布流 (JS 最短列分列, 行优先=APP 语义; 列数/列高见 app.js masonrySpec) ---------- */
+.masonry { display: flex; align-items: flex-start; }
+.masonry > .empty-state { flex: 1; }
+.mcol { flex: 1 1 0; min-width: 0; }
 .card {
-  break-inside: avoid; margin-bottom: 14px; border-radius: var(--radius); overflow: hidden;
+  margin-bottom: 14px; border-radius: var(--radius); overflow: hidden;
   background: var(--card); position: relative; cursor: pointer;
   transition: transform .18s ease, box-shadow .18s ease;
   border: 1px solid rgba(255, 255, 255, .04);
@@ -250,8 +252,7 @@ main { max-width: 1720px; margin: 0 auto; padding: 22px 22px 60px; }
   .searchbox { width: 160px; }
   .toggle-r16 span.label { display: none; }
   main { padding: 14px 12px 50px; }
-  .masonry { columns: 2 150px; column-gap: 10px; }
-  .card { margin-bottom: 10px; }
+  .card { margin-bottom: 10px; } /* 竖向间距; 横向 column-gap 由 app.js 按断点内联 */
   .modal-body { flex-direction: column; }
   .modal-img-pane { padding: 52px 10px 10px; flex: none; height: 52vh; }
   .modal-img-pane img { max-height: 100%; }

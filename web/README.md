@@ -38,7 +38,10 @@ API 内存缓存（rank 10min / wallpapers 5min / comics 30min）。
 
 `index.html + app.js + style.css`，原生 ES module 单页应用：
 
-- **发现**：CSS columns 瀑布流 + IntersectionObserver 无限滚动（游标分页）+ 懒加载骨架屏
+- **发现**：JS 最短列瀑布流（复刻 APP `StaggeredGridLayoutManager` 行优先语义：每张卡放入累计高度最矮的列、只追加不重排；列数随断点 2–5 列，卡高由数据 `width/height` 先算、不回流）
+  + IntersectionObserver 无限滚动（游标分页）+ 懒加载骨架屏。
+  ⚠️ 历史坑：初版用 CSS multi-column（`columns: 5 280px`）是**列优先**填充且 append 时全版重新均衡，
+  视觉顺序 ≠ 数据顺序（首屏一行实为第 1/21/41/60/79 条）且已显示卡片跳位；2026-10-14 改为 JS 分列并经无头浏览器实测验证。
 - **作品**：聚合索引网格 → 点击进入该作品服务端过滤流
 - **排行**：4 组 tab，与 APP 排行页同接口
 - **详情弹窗**：先缩略图、后台渐进加载**原图**（XOR 解码流）无缝替换；元数据/标签/Pixiv 链接/原图下载

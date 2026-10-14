@@ -39,6 +39,46 @@ const state = {
   modal: null,               // 当前打开的 wallpaper
 };
 
+// ---------- 瀑布流布局 (复刻 APP StaggeredGridLayoutManager 语义) ----------
+// CSS multi-column 是"列优先"填充(第 1 列自上而下装满才轮到第 2 列), 视觉顺序 ≠ 数据顺序,
+// 且每次 append 全容器重新均衡列高, 已显示的卡片会跳位。改为自维护 N 个列容器:
+// 每张卡放入累计高度最小的列 → 行优先、只追加不重排, 与 APP 竖向瀑布流同语义;
+// 卡片高度由数据里的 width/height 先算出(aspect-ratio 内联), 无需等图片加载、不回流。
+const MAS = { ideal: 280, gapDesk: 14, gapMobile: 10, maxCols: 5 };
+function masonrySpec(width) {
+  if (window.innerWidth <= 900) return { n: 2, gap: MAS.gapMobile }; // 与 APP 手机端 2 列对齐
+  const n = Math.max(2, Math.min(MAS.maxCols, Math.floor((width + MAS.gapDesk) / (MAS.ideal + MAS.gapDesk))));
+  return { n, gap: MAS.gapDesk };
+}
+const cardH = (w, colW, gap) => colW * ((w.width && w.height) ? (w.height / w.width) : 1.414) + gap;
+
+let layout = null; // { n, gap, colW, width, cols:[{el, h}] }
+const gridWidth = () => $('#grid').clientWidth || Math.max(320, window.innerWidth - 44);
+function buildLayout() {
+  const grid = $('#grid');
+  grid.innerHTML = '';
+  const width = gridWidth();
+  const { n, gap } = masonrySpec(width);
+  grid.style.columnGap = gap + 'px';
+  const colW = (width - gap * (n - 1)) / n;
+  const cols = [];
+  for (let i = 0; i < n; i++) {
+    const el = document.createElement('div');
+    el.className = 'mcol';
+    grid.appendChild(el);
+    cols.push({ el, h: 0 });
+  }
+  layout = { n, gap, colW, width, cols };
+  return layout;
+}
+const layoutStale = () => !layout || !layout.cols[0].el.isConnected || gridWidth() !== layout.width;
+function placeCard(w) {
+  let best = layout.cols[0];
+  for (const c of layout.cols) if (c.h < best.h) best = c;
+  best.el.appendChild(cardEl(w));
+  best.h += cardH(w, layout.colW, layout.gap);
+}
+
 // ---------- 过滤 ----------
 function matchQuery(w, q) {
   if (!q) return true;
@@ -76,22 +116,16 @@ function cardEl(w) {
 }
 function esc(s) { return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 
-function renderPool() {
-  const grid = $('#grid');
-  grid.innerHTML = '';
-  const frag = document.createDocumentFragment();
+function renderPool() { // 全量重排 (搜索/R16/resize): 按 pool 原序重新做最短列摆放
+  buildLayout();
   let n = 0;
-  for (const w of state.pool) if (visible(w)) { frag.appendChild(cardEl(w)); n++; }
-  grid.appendChild(frag);
+  for (const w of state.pool) if (visible(w)) { placeCard(w); n++; }
   updateCountPill(n);
 }
-function appendCards(list) {
-  const grid = $('#grid');
-  const frag = document.createDocumentFragment();
-  let n = 0;
-  for (const w of list) if (visible(w)) { frag.appendChild(cardEl(w)); n++; }
-  grid.appendChild(frag);
-  updateCountPill(grid.children.length);
+function appendCards(list) { // 增量追加: 只摆新卡, 已显示的卡不移动 (与 APP 一致)
+  if (layoutStale()) buildLayout();
+  for (const w of list) if (visible(w)) placeCard(w);
+  updateCountPill($('#grid').querySelectorAll('.card').length);
 }
 function updateCountPill(n) {
   const parts = [];
@@ -139,11 +173,13 @@ async function fetchPage() {
   $('#loader').innerHTML = '<div class="spinner"></div>加载中…';
 }
 function showEmpty() {
-  $('#grid').innerHTML = `<div class="empty-state" style="column-span:all"><div class="big">🌌</div><p>没有匹配的壁纸<br>换个关键词，或下滑加载更多数据</p></div>`;
+  layout = null;
+  $('#grid').innerHTML = `<div class="empty-state"><div class="big">🌌</div><p>没有匹配的壁纸<br>换个关键词，或下滑加载更多数据</p></div>`;
 }
 function resetStream(comic = null) {
   state.comic = comic;
   state.cursor = null; state.done = false; state.pool = []; state.seen.clear();
+  layout = null;
   $('#grid').innerHTML = '';
   switchView('discover');
   fetchPage();
@@ -330,6 +366,13 @@ new IntersectionObserver((entries) => {
   if (entries[0].isIntersecting && state.view === 'discover' && !state.query?.length) fetchPage();
   else if (entries[0].isIntersecting && state.view === 'discover' && state.pool.filter(visible).length < 20 && !state.done) fetchPage();
 }, { rootMargin: '800px' }).observe($('#sentinel'));
+
+// ---------- 窗宽变化: 仅列数/列宽真正改变时重排 (按 pool 原序重摆, 图片走缓存) ----------
+let rsTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(rsTimer);
+  rsTimer = setTimeout(() => { if (state.view === 'discover' && layoutStale()) renderPool(); }, 150);
+});
 
 // ---------- 启动 ----------
 applyHash();
