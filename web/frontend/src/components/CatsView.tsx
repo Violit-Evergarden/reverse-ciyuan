@@ -26,7 +26,6 @@ function ComicCard({ c }: { c: { name: string; count: number; thumbUrl: string }
       </div>
       <div className="info">
         <div className="name" title={c.name}>{c.name}</div>
-        <div className="count"><b>{c.count}</b> 张</div>
       </div>
     </div>
   );

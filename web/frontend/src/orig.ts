@@ -4,10 +4,24 @@ import { origOf } from './api';
 import type { Wallpaper } from './types';
 
 export interface Prog { loaded: number; total: number }
-let blobCache: { id: string; blob: Blob } | null = null;
+// LRU 字节上限缓存 (iPhone 内存友好): 重进详情零网络零解码等待
+const MAX_BYTES = 384 * 1024 * 1024;
+const lru = new Map<string, Blob>();
+let lruBytes = 0;
+function lruPut(id: string, blob: Blob) {
+  const old = lru.get(id);
+  if (old) lruBytes -= old.size;
+  lru.set(id, blob);
+  lruBytes += blob.size;
+  for (const [k, v] of lru) { // Map 迭代序 = 插入序: 从最旧淘汰
+    if (lruBytes <= MAX_BYTES) break;
+    lru.delete(k);
+    lruBytes -= v.size;
+  }
+}
+export const getCachedOrig = (id: string) => lru.get(id) || null;
 let inflight: { id: string; p: Promise<Blob>; abort: AbortController; cb: ((p: Prog) => void) | null } | null = null;
 
-export const getCachedOrig = (id: string) => (blobCache?.id === id ? blobCache.blob : null);
 
 export function ensureOrig(w: Wallpaper, onProg?: (p: Prog) => void): Promise<Blob> {
   const c = getCachedOrig(w.id);
@@ -29,7 +43,7 @@ export function ensureOrig(w: Wallpaper, onProg?: (p: Prog) => void): Promise<Bl
     const reader = r.body?.getReader();
     if (!reader) {
       const b = await r.blob();
-      blobCache = { id: w.id, blob: b };
+      lruPut(w.id, b);
       slot.cb?.({ loaded: b.size, total: b.size });
       return b;
     }
@@ -40,8 +54,8 @@ export function ensureOrig(w: Wallpaper, onProg?: (p: Prog) => void): Promise<Bl
       if (done) break;
       if (value) { chunks.push(value); loaded += value.length; slot.cb?.({ loaded, total }); }
     }
-    const blob = new Blob(chunks as BlobPart[], { type: 'image/webp' });
-    blobCache = { id: w.id, blob };
+    const blob = new Blob(chunks as BlobPart[], { type: r.headers.get('content-type') || 'image/webp' });
+    lruPut(w.id, blob);
     slot.cb?.({ loaded: blob.size, total: blob.size });
     return blob;
   })();

@@ -8,6 +8,27 @@ const fmtDate = (ms: number) => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
+// 显示降采样: 超大原图 (如 2775×5551, 解码位图 ~60MB) 直接上屏会在移动端累积爆内存;
+// 先 canvas 降到 ≤2048px 再显示, 原 blob 仅留给分享/下载。失败回落原图 URL。
+async function downscaleForDisplay(blob: Blob, maxDim = 2048): Promise<string | null> {
+  try {
+    const bmp = await createImageBitmap(blob);
+    try {
+      if (Math.max(bmp.width, bmp.height) <= maxDim) return null;
+      const k = maxDim / Math.max(bmp.width, bmp.height);
+      const cw = Math.max(1, Math.round(bmp.width * k));
+      const ch = Math.max(1, Math.round(bmp.height * k));
+      const canvas = document.createElement('canvas');
+      canvas.width = cw; canvas.height = ch;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return null;
+      ctx.drawImage(bmp, 0, 0, cw, ch);
+      const out = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/webp', 0.85));
+      return out ? URL.createObjectURL(out) : null;
+    } finally { bmp.close?.(); }
+  } catch { return null; }
+}
+
 export function ModalView() {
   useV();
   const w = state.modal;
@@ -37,16 +58,16 @@ export function ModalView() {
     const cached = getCachedOrig(w.id);
     if (cached) {
       blobRef.current = cached;
-      setOrigUrl(URL.createObjectURL(cached));
       setProg({ loaded: cached.size, total: cached.size });
       setOrigState('ready');
+      void downscaleForDisplay(cached).then((u) => { if (!cancelled) setOrigUrl(u || URL.createObjectURL(cached)); });
     } else {
       setOrigState('loading');
       ensureOrig(w, onProg).then((blob) => {
         if (cancelled) return;
         blobRef.current = blob;
-        setOrigUrl(URL.createObjectURL(blob));
         setOrigState('ready');
+        void downscaleForDisplay(blob).then((u) => { if (!cancelled) setOrigUrl(u || URL.createObjectURL(blob)); });
       }).catch(() => { if (!cancelled) setOrigState('error'); });
     }
     return () => { cancelled = true; };

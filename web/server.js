@@ -259,13 +259,16 @@ const searchWallpapers = async ({ cursor = INT64_MAX, keyword = '' } = {}) => {
 };
 
 // ---------------- 图片: XOR 解码 + 缓存 ----------------
+const isPlainImage = (b) => b.subarray(0, 4).toString('latin1') === 'RIFF'
+  || (b[0] === 0xff && b[1] === 0xd8)
+  || (b[0] === 0x89 && b.subarray(1, 4).toString('latin1') === 'PNG');
 function xorDecodeWebp(buf) {
-  if (buf.length > 12 && buf.subarray(0, 4).toString('latin1') === 'RIFF') return buf; // 未混淆
+  if (buf.length > 12 && isPlainImage(buf)) return buf; // 未混淆 (webp/jpeg/png 直连源)
   const key = buf[0] ^ 0x52;
   const out = Buffer.from(buf);
   for (let i = 0; i < out.length; i++) out[i] ^= key;
-  if (out.subarray(0, 4).toString('latin1') !== 'RIFF' || out.subarray(8, 12).toString('latin1') !== 'WEBP') throw new Error('XOR 解码失败: 非 RIFF/WEBP');
-  return out;
+  if (isPlainImage(out)) return out;
+  throw new Error('XOR 解码失败: 非 RIFF/WEBP/JPEG/PNG (上游可能返回了错误页)');
 }
 function sniffType(buf) { // 缩略图重定向后可能是 jpeg (imgdb→百度CDN), 按 magic 判定
   if (buf.length > 12 && buf.subarray(0, 4).toString('latin1') === 'RIFF' && buf.subarray(8, 12).toString('latin1') === 'WEBP') return 'image/webp';
@@ -275,17 +278,51 @@ function sniffType(buf) { // 缩略图重定向后可能是 jpeg (imgdb→百度
 }
 const cacheKey = (u) => crypto.createHash('sha1').update(u).digest('hex');
 const inflight = new Map();
+let writeCount = 0;
+async function pruneCache() { // 磁盘缓存 LRU 上限 1.5GB, 超了按 mtime 删最旧
+  const CAP = 1.5 * 1024 ** 3;
+  try {
+    const ents = await fsp.readdir(CACHE_DIR, { withFileTypes: true });
+    const files = [];
+    let total = 0;
+    for (const e of ents) {
+      if (!e.isFile()) continue;
+      const st = await fsp.stat(path.join(CACHE_DIR, e.name));
+      total += st.size;
+      files.push({ name: e.name, mtime: st.mtimeMs, size: st.size });
+    }
+    if (total <= CAP) return;
+    files.sort((a, b) => a.mtime - b.mtime);
+    for (const f of files) {
+      if (total <= CAP * 0.8) break;
+      await fsp.unlink(path.join(CACHE_DIR, f.name)).catch(() => {});
+      total -= f.size;
+    }
+  } catch {}
+}
+async function fetchUpstream(imgUrl) {
+  // 注意: 不能带 referer — imgdb 302→百度 bcebos CDN, 其防盗链对带 referer 的请求返回 403
+  const res = await request(imgUrl, { headers: { 'user-agent': UA_JSON }, timeout: 60000 });
+  if (res.status !== 200) throw new Error(`图片 ${res.status}: ${imgUrl}`);
+  return res.body;
+}
 async function cachedFetchImage(imgUrl, decodeXor) {
   const key = cacheKey(imgUrl) + (decodeXor ? '.orig.webp' : '.raw');
   const fp = path.join(CACHE_DIR, key);
   try { return await fsp.readFile(fp); } catch {}
   if (inflight.has(key)) return inflight.get(key);
   const p = (async () => {
-    // 注意: 不能带 referer — imgdb 302→百度 bcebos CDN, 其防盗链对带 referer 的请求返回 403
-    const res = await request(imgUrl, { headers: { 'user-agent': UA_JSON }, timeout: 60000 });
-    if (res.status !== 200) throw new Error(`图片 ${res.status}: ${imgUrl}`);
-    const data = decodeXor ? xorDecodeWebp(res.body) : res.body;
+    let body = await fetchUpstream(imgUrl);
+    let data;
+    try {
+      data = decodeXor ? xorDecodeWebp(body) : body;
+    } catch (e) {
+      // 上游偶发 200 错误页(地理/限流): 重试一次, 坏数据绝不入缓存
+      body = await fetchUpstream(imgUrl);
+      data = decodeXor ? xorDecodeWebp(body) : body;
+    }
     fsp.writeFile(fp, data).catch(() => {});
+    if (++writeCount % 32 === 0) void pruneCache();
     return data;
   })();
   inflight.set(key, p);
@@ -446,8 +483,8 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/img/orig') {
       const target = u.searchParams.get('u');
       if (!target || !/^https?:\/\//.test(target)) { res.writeHead(400); return res.end('bad url'); }
-      const buf = await cachedFetchImage(target, true); // *.a → XOR → webp
-      return img(res, buf, 'image/webp', 86400 * 30);
+      const buf = await cachedFetchImage(target, true); // *.a → XOR; 直连源原样透传
+      return img(res, buf, sniffType(buf), 86400 * 30);
     }
     if (p === '/api/status') {
       return json(res, 0, { app: APP, hasToken: !!SECRETS.token, hasAccount: !!(SECRETS.account && SECRETS.pwd) });
