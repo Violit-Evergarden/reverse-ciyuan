@@ -1,11 +1,20 @@
 #!/usr/bin/env bash
-# 增量部署 (开发机执行): 构建前端 → rsync 应用+产物 → 远端重启 → 健康检查。
-#   bash tools/deploy.sh <ssh目标 user@host> <域名>
-# secrets.local.json 仅远端缺失时上传一次 (chmod 600), 之后不覆盖远端 token 缓存。
+# 增量部署 (开发机执行): 读取 web/deploy.local.json (gitignored):
+#   { "target": "root@IP", "domain": "www.violet37.cn", "basic_user": "..", "basic_pass": ".." }
+# 流程: 本地 vite build → rsync dist+server.js → 远端 restart → https(+BasicAuth) 健康检查。
+# 用法: bash tools/deploy.sh   (或显式: bash tools/deploy.sh <user@host> <域名>)
 set -euo pipefail
-TARGET="${1:?用法: bash tools/deploy.sh <user@host> <域名>}"
-DOMAIN="${2:?缺域名}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+CFG="$ROOT/web/deploy.local.json"
+if [ -f "$CFG" ]; then
+  TARGET="${1:-$(python3 -c "import json;print(json.load(open('$CFG'))['target'])")}"
+  DOMAIN="${2:-$(python3 -c "import json;print(json.load(open('$CFG'))['domain'])")}"
+  BASIC="$(python3 -c "import json;d=json.load(open('$CFG'));print(d['basic_user']+':'+d['basic_pass'])")"
+else
+  TARGET="${1:?用法: bash tools/deploy.sh <user@host> <域名>}"
+  DOMAIN="${2:?缺域名}"
+  BASIC="${CIYUAN_BASIC:-}"
+fi
 APP_DIR=/opt/ciyuan/web
 
 echo "== 本地构建 =="
@@ -22,14 +31,15 @@ if ! ssh "$TARGET" "test -f $APP_DIR/secrets.local.json"; then
 fi
 
 echo "== 远端重启 =="
-ssh "$TARGET" "sudo systemctl restart ciyuan-web && sleep 1 && systemctl is-active ciyuan-web"
+ssh "$TARGET" "systemctl restart ciyuan-web && sleep 1 && systemctl is-active ciyuan-web"
 
 echo "== 健康检查 =="
+AUTH=(); [ -n "$BASIC" ] && AUTH=(-u "$BASIC")
 for _ in $(seq 1 20); do
-  code=$(curl -s -m 8 -o /dev/null -w '%{http_code}' "https://$DOMAIN/api/status" || true)
+  code=$(curl -s -m 8 "${AUTH[@]+"${AUTH[@]}"}" -o /dev/null -w '%{http_code}' "https://$DOMAIN/api/status" || true)
   [ "$code" = "200" ] && break
   sleep 1
 done
 [ "$code" = "200" ] || { echo "!! https://$DOMAIN/api/status 非 200 ($code)"; exit 1; }
-curl -s -m 8 "https://$DOMAIN/api/status"; echo
+curl -s -m 8 "${AUTH[@]+"${AUTH[@]}"}" "https://$DOMAIN/api/status"; echo
 echo "== 部署完成: https://$DOMAIN =="

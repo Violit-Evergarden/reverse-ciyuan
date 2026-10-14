@@ -68,6 +68,20 @@ dev：`cd web/frontend && npm run dev` → 5173，/api 代理 8787；构建：`n
 - token 过期后服务端自动用 secrets 中账号重登；账号密码变更时更新 secrets.local.json 即可
 - 原图较大（可达 8MB+），首张加载数秒属正常；已做磁盘缓存
 
+## 部署 (腾讯云轻量, 2026-10-14)
+
+- 服务器: Lighthouse 上海 4C4G Ubuntu 22.04; 入口 **https://www.violet37.cn**
+  (复用该机已有 Let's Encrypt 证书, certbot 自动续期; nginx 1.18 需用 `listen 443 ssl http2;`)。
+- 架构: nginx(Basic Auth + TLS) → `127.0.0.1:8787` node server.js (systemd `ciyuan-web`) → 伺服 `web/dist`。
+- 日常两条命令: `bash tools/web_verify.sh && bash tools/deploy.sh`
+  (deploy.sh 读 **web/deploy.local.json** — gitignored: target/domain/Basic Auth 凭据)。
+- 一次性初始化: `tools/deploy_init.sh <域名> <basic_user> <basic_pass>` (包/systemd/nginx/htpasswd/certbot, 幂等)。
+- 安全: SSH 仅密钥 (`PasswordAuthentication no`); 上游账号凭据服务器端 `secrets.local.json` 权限 600;
+  Basic Auth 与 SSH 目标信息均只存 gitignored 文件。
+- 旧服务 video-to-text / claw-agents / 3 个旧 nginx 站点已停删 (备份 `/root/old-backup-20261014.tgz`);
+  mihomo 代理保留。
+- iOS: Safari 打开入口 → 分享 → 添加到主屏幕 (standalone 全屏, 图标/安全区已适配); Basic Auth 首次弹窗后由系统记住。
+
 ## 合规
 
 仅供个人对自己账号数据的互操作性研究（授权逆向项目的一部分）。请勿公开部署、批量抓取或商用。
