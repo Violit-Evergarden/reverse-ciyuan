@@ -32,7 +32,10 @@
    随机/漫画源已废弃(-6 "请升级至最新版"=type_url 未知;缺 HTTP sign 也报这个误导文案,注意区分)。
 4. **网页版交付** `web/`:零 npm 依赖(Node≥18)。server.js=协议网关(sign/protobuf/token自动重登/
    图片代理:XOR原图解码+缩略图无Referer防盗链),public/=瀑布流单页(发现/作品/排行/详情原图/本地搜索/R16开关)。
-   瀑布流为 **JS 最短列分列**(行优先, 复刻 APP StaggeredGrid 语义, 2026-10-14 修); 勿改回 CSS multi-column(列优先+append 全版重排, 视觉顺序与 APP 不一致)。
+   瀑布流为**纯函数最短列贪心**(行优先, 复刻 APP StaggeredGrid 语义); 勿改回 CSS multi-column。
+   2026-10-14 夜起前端为 **React18+Vite5+TS** (`web/frontend` → `web/dist`), 交互模型/手势/门禁/部署
+   全经验见报告 **§11**; 部署闭环 `bash tools/web_verify.sh && bash tools/deploy.sh`
+   (凭据在 gitignored `web/secrets.local.json` 与 `web/deploy.local.json`); 线上 https://www.violet37.cn。
    启动 `node web/server.js` → http://127.0.0.1:8787。
 5. 图片链路新知:imgdb 缩略图 302→百度 bcebos(实为 jpeg,**带 Referer 403**);bitiful 为 http(443 证书不匹配)。
 6. 新工具:`tools/dump_headers.py`(HTTP/2 完整头导出——发现 /rank /u/login 需要 t+sign 头的关键)。

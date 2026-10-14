@@ -73,6 +73,7 @@ reverse/
 | 缩略图重定向链 | `pic1.imgdb.cn/i/*.webp` → 302 → `wkphoto.cdn.bcebos.com/*.jpg`(百度CDN,实为 jpeg);**带 Referer→403,不带→200** |
 | Channel 信封 | req=1 token=2 p=3 v=4(102) vn=5 ua=6 t=7 **sg=8** cd=9 sh=10(证书MD5hex.hashCode=1632386598) nd=11 mt=12 ij=13;cd/nd 服务端不校验可复用抓包值 |
 | pixivId 语义 | **string 字段**:纯数字=pixiv 作品 ID(可带 `-页码` 后缀=多图投稿第 N 页,已线上实锤);**32位hex=站外源标识**(无 pixiv 源,多为国产 IP 官方壁纸规格)。来源模型:少数策展账号批量转载 pixiv 高人气作品(单账号占 94/140;author=画师 ≠ uploader=APP账号)。详见报告 §10 |
+| Web 部署 | 线上 https://www.violet37.cn (nginx TLS → systemd ciyuan-web → 8787); 日常 `tools/web_verify.sh && tools/deploy.sh`; 凭据/SSH 目标在 gitignored `web/*.local.json`; 全经验见报告 §11 |
 | 公开仓库脱敏 | `data/raw_login/`(明文账密/token/手机号)**不入库**(.gitignore,仅本地);两处含旧 token 的 pb 已等长打码 `REDACTED_TOKEN_*`(其 sg 校验作废,verify 自动 SKIP);`web/secrets.local.json` 从不跟踪。⚠️ 历史提交 95b4537 曾公开含明文→**建议改密码或重写历史** |
 
 ---

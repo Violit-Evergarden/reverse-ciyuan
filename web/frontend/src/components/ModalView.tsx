@@ -82,7 +82,9 @@ export function ModalView() {
     document.body.style.overflow = w ? 'hidden' : '';
   }, [w]);
 
-  // ---------- 手势: 捏合缩放 / 放大后拖动 / 单击弹层 / 横滑切图 / 下滑关闭 ----------
+  // ---------- 手势 (仅触屏): 捏合缩放 / 放大后拖动 / 单击弹层 / 横滑切图 / 下滑关闭 ----------
+  // PC 端 (pointer:fine) 不启用任何触摸手势: 关闭用 ✕/Esc, 信息常显右栏, 无需切图手势。
+  const isTouch = () => window.matchMedia('(pointer: coarse)').matches;
   const start = useRef<{ x: number; y: number } | null>(null);
   const navigate = (dir: 1 | -1) => {
     const list = state.cache.pool.filter(visible);
@@ -91,6 +93,7 @@ export function ModalView() {
     if (t) openModal(t, { replace: true }); // replace: 切图不污染历史栈
   };
   const onPointerDown = (e: React.PointerEvent) => {
+    if (!isTouch()) return;
     try { (e.target as Element).setPointerCapture?.(e.pointerId); } catch { /* 合成/无效 pointerId: 忽略捕获 */ }
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     start.current = { x: e.clientX, y: e.clientY };
@@ -102,8 +105,7 @@ export function ModalView() {
   };
   const onPointerMove = (e: React.PointerEvent) => {
     const p = pointers.current.get(e.pointerId);
-    if (!p) return;
-    const dx = e.clientX - p.x, dy = e.clientY - p.y;
+    if (!p) return;    const dx = e.clientX - p.x, dy = e.clientY - p.y;
     if (Math.abs(dx) + Math.abs(dy) > 6) moved.current = true;
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pointers.current.size === 2 && pinch.current) {
@@ -145,6 +147,7 @@ export function ModalView() {
   const sheetRef = useRef<HTMLElement | null>(null);
   const drag = useRef({ y0: 0, dy: 0, on: false });
   const onSheetDown = (e: React.PointerEvent) => {
+    if (!isTouch()) return;
     const el = sheetRef.current;
     if (!el) return;
     const onHandle = (e.target as HTMLElement).classList.contains('sheet-handle');
@@ -227,25 +230,27 @@ export function ModalView() {
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
       >
-        <img
-          key={w.id}
-          className={syncing ? 'loading-orig' : ''}
-          src={origUrl || thumbOf(w)}
-          alt=""
-          style={{ transform: `translate(${tf.x}px, ${tf.y}px) scale(${tf.s})` }}
-        />
-        {syncing && prog && (
-          <div className="orig-ring" role="progressbar" aria-valuenow={Math.round(pct * 100)}>
-            <svg viewBox="0 0 40 40">
-              <circle className="ring-bg" cx="20" cy="20" r="17" />
-              <circle className="ring-fg" cx="20" cy="20" r="17" strokeDasharray={2 * Math.PI * 17} strokeDashoffset={2 * Math.PI * 17 * (1 - pct)} />
-            </svg>
-            <span>{prog.total ? `${Math.round(pct * 100)}%` : '…'}</span>
-          </div>
-        )}
-        {origState === 'error' && (
-          <div className="orig-hint"><span className="dot" /><span>原图加载失败（点下载重试）</span></div>
-        )}
+        <div className="modal-figure">
+          <img
+            key={w.id}
+            className={syncing ? 'loading-orig' : ''}
+            src={origUrl || thumbOf(w)}
+            alt=""
+            style={{ transform: `translate(${tf.x}px, ${tf.y}px) scale(${tf.s})` }}
+          />
+          {syncing && prog && (
+            <div className="orig-ring" role="progressbar" aria-valuenow={Math.round(pct * 100)}>
+              <svg viewBox="0 0 40 40">
+                <circle className="ring-bg" cx="20" cy="20" r="17" />
+                <circle className="ring-fg" cx="20" cy="20" r="17" strokeDasharray={2 * Math.PI * 17} strokeDashoffset={2 * Math.PI * 17 * (1 - pct)} />
+              </svg>
+              <span>{prog.total ? `${Math.round(pct * 100)}%` : '…'}</span>
+            </div>
+          )}
+          {origState === 'error' && (
+            <div className="orig-hint"><span className="dot" /><span>原图加载失败（点下载重试）</span></div>
+          )}
+        </div>
         <button className="modal-close" onClick={closeModal} title="关闭 (Esc)">✕</button>
         {tf.s > 1 && <div className="zoom-hint">{tf.s.toFixed(1)}× · 双击还原 · 单击看信息</div>}
       </div>

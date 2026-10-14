@@ -350,3 +350,46 @@ resize 仅列数/列宽变化时按 pool 原序重排。验证(无头浏览器 +
   **可解码的账号信息**: 24hex ID = Mongo ObjectId, 前 4 字节大端 = 账号创建时间 (`curator_scan.py oid_created`,
   如头号策展号 5ed707f6… = 2020-06-03 注册); 32hex 非 ObjectId 不可解。扫描同时导出
   `data/curator_scan_<day>.json` (按账号聚合的结构化数据)。
+
+## 11. Web 工程 / 部署 / 移动端经验清单 (2026-10-14 夜, 供后续会话/agent 接手)
+
+**架构**: `web/frontend` (React 18 + Vite 5 + TS; 零依赖外部 store `useSyncExternalStore`;
+瀑布流=纯函数贪心最短列 `masonry.ts distribute`, 前缀稳定) → 构建 `web/dist`;
+`web/server.js` 单端口伺服 (协议网关 + 静态, 零 npm 依赖); 线上 nginx(TLS 复用既有 LE 证书) →
+systemd `ciyuan-web` → 127.0.0.1:8787; 入口 **https://www.violet37.cn**。
+**门禁**: cookie 会话 180 天 (`secrets.gate`, `POST /gate` 换 cookie; 前端 API 401 自动跳门禁页) ——
+不用 nginx Basic Auth: iOS 上 Basic Auth 凭据仅存内存, 杀 Safari/web clip 即失效。
+**部署闭环**: `bash tools/web_verify.sh && bash tools/deploy.sh`
+(后者读 gitignored `web/deploy.local.json`: ssh 目标/域名/门禁密码; 流程 build→rsync→restart→带 cookie 健康检查)。
+一次性初始化 `tools/deploy_init.sh`(幂等; nginx 1.18 需 `listen 443 ssl http2;`)。
+
+**交互模型**: tab=首页/分类/排行; 流视图承载 scope(null|comic 服务端过滤|uploader 池内|search 仅 Pro),
+各 scope 独立缓存 {pool,seen,cursor,done} 切换瞬时恢复; 详情=哈希后缀 `/w/<id>`(同文档遍历, 侧滑零重载);
+移动端详情=全屏舞台+底部弹层; **手势仅触屏启用** (`pointer:coarse` 门禁), PC 端 ✕/Esc 关闭、右栏常显。
+
+**坑清单 (全部实测根因+修复)**:
+- CSS multi-column 列优先 + append 全版重排 → 瀑布流必须最短列贪心; 经典滚动条 ~10px 宽度抖动
+  不得作为重排信号 (仅列数/间距变化才重排), 否则每次 append 只剩当批。
+- `navigator.share` 必须紧贴用户手势: 现场 fetch 再 share 必失败 (Chrome "Must be handling a user
+  gesture" / iOS "request not allowed"); 对策=卡片 pointerdown 预取 + 单飞 in-flight + 点击时 blob 在手
+  手势内分享; iOS standalone 无下载 UI, `<a download>` 静默失败, 只能走分享面板。
+- 门禁页必须 fetch 提交 + `location.replace`, 原生 form POST 会留历史条目 → 返回手势回密码框。
+- `pushState('')` 空 URL 条目在 iOS 侧滑触发整页重载 → 一律用哈希条目。
+- `setPointerCapture` 对合成/无效 pointerId 抛 NotFoundError → 整条手势链静默失效, 必须 try/catch。
+- 僵尸标签: index `no-cache` 允许同标签复用旧 bundle → index/门禁 `no-store`; assets 内容哈希长缓存。
+- 上游 CDN 偶发 200 错误页 (地理/限流, journal 实锤 "XOR 解码失败") → 解码容错 (RIFF/JPEG/PNG 明文直通)
+  + 重试一次 + 坏数据绝不入缓存; `/api/img/orig` 按 magic 定 content-type。
+- 上游脏数据 `tags:[""]` → 解析层过滤空 tags/characters + 渲染层二次防御。
+- 进度回调按请求绑定; 全局单例回调会让上一张在途请求的进度打进新弹窗 (横跳)。
+- `origUrl` 等弹窗级状态必须在 `[w]` effect 里重置, 否则背景残留上一张。
+
+**内存/性能**: 原图 blob LRU 384MB 字节上限 (重进详情 57ms 出图); 显示降采样 ≤2048px
+(2775×5551 解码位图 ~60MB → ~12MB, 移动端多图不爆内存), 原 blob 仅分享/下载用;
+服务端磁盘缓存 1.5GB LRU; 单飞 + abort 旧请求; 缩略图 lazy + 骨架屏。
+
+**验证**: `tools/web_verify.sh` 7 断言 (语法/门禁/API/静态); 布局与手势走 chrome-devtools 无头断言
+(emulate viewport + networkConditions; loopback 不受限速, 测进度环需用线上域); 线上健康检查带门禁 cookie。
+
+**凭据纪律**: `web/secrets.local.json` (account/pwd/salt/token/gate) 与 `web/deploy.local.json`
+(ssh 目标/域名/gate) 均 gitignored; 服务器端 secrets 600; SSH 仅密钥 (PasswordAuthentication no);
+旧服务备份 `/root/old-backup-20261014.tgz`, mihomo 代理保留未动。
