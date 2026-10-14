@@ -264,12 +264,23 @@ main { max-width: 1720px; margin: 0 auto; padding: 22px 22px calc(60px + env(saf
 
 /* ---------- 响应式 ---------- */
 @media (max-width: 900px) {
-  .topbar { padding: 0 12px; gap: 10px; }
-  .brand .sub { display: none; }
-  .searchbox { width: 160px; }
+  :root { --topbar-h: 96px; } /* 双行顶栏: 行1 brand+nav, 行2 search+R16 */
+  .topbar {
+    flex-wrap: wrap; row-gap: 8px; align-content: center;
+    padding: 8px 12px; padding-top: calc(8px + env(safe-area-inset-top));
+    height: auto; min-height: calc(var(--topbar-h) + env(safe-area-inset-top));
+  }
+  .topbar .brand { order: 1; }
+  .topbar .nav { order: 2; margin-left: auto; }
+  .topbar .nav button { white-space: nowrap; }
+  .topbar .spacer { display: none; }
+  .topbar .searchbox { order: 3; flex: 1 1 auto; width: auto; min-width: 0; }
+  .topbar .toggle-r16 { order: 4; }
   .toggle-r16 span.label { display: none; }
-  main { padding: 14px 12px 50px; }
-  .card { margin-bottom: 10px; } /* 竖向间距; 横向 column-gap 由 app.js 按断点内联 */
+  main { padding: 14px 12px calc(50px + env(safe-area-inset-bottom)); }
+  .filter-bar { padding: 10px 2px; gap: 8px; }
+  .fb-title { font-size: 17px; }
+  .card { margin-bottom: 10px; } /* 竖向间距; 横向 column-gap 由 JS 按断点内联 */
   .modal-body { flex-direction: column; }
   .modal-img-pane { padding: 52px 10px 10px; flex: none; height: 52vh; }
   .modal-img-pane img { max-height: 100%; }
@@ -278,6 +289,6 @@ main { max-width: 1720px; margin: 0 auto; padding: 22px 22px calc(60px + env(saf
   .side-actions .btn { flex: 1; }
 }
 @media (max-width: 560px) {
-  .nav button { padding: 7px 11px; font-size: 13.5px; }
-  .searchbox { width: 120px; }
+  .nav button { padding: 7px 10px; font-size: 13px; }
+  .brand .logo { font-size: 19px; }
 }
