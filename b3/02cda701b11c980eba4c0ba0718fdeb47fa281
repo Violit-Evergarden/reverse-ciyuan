@@ -1,0 +1,26 @@
+tools/deploy.sh
+  s_61c1ffba966784::t_6f10f7c02b4d01 2-5,8-17,34,37,39,44
+web/README.md
+  s_61c1ffba966784::t_031d4c78122f67 71-84
+tools/deploy_init.sh
+  s_61c1ffba966784::t_e8185988e07c65 2-5,7-9,15,17,22,25,34,36-38,62-73,75-93,97-99,103,105,107,110-112
+  s_61c1ffba966784::t_de6f18da38a601 74
+.gitignore
+  s_61c1ffba966784::t_c48684ac2ec921 7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.49-trip",
+  "base_commit_sha": "b302cda701b11c980eba4c0ba0718fdeb47fa281",
+  "prompts": {},
+  "sessions": {
+    "s_61c1ffba966784": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "487d0a4a-1bb9-4f7f-bd4a-838c151ca894",
+        "model": "qwen3.8-max"
+      },
+      "human_author": "qiaoyuanshi <qiaoyuanshi@trip.com>"
+    }
+  }
+}
