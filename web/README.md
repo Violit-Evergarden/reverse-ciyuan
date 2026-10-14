@@ -42,6 +42,12 @@ API 内存缓存（rank 10min / wallpapers 5min / comics 30min）。
   + IntersectionObserver 无限滚动（游标分页）+ 懒加载骨架屏。
   ⚠️ 历史坑：初版用 CSS multi-column（`columns: 5 280px`）是**列优先**填充且 append 时全版重新均衡，
   视觉顺序 ≠ 数据顺序（首屏一行实为第 1/21/41/60/79 条）且已显示卡片跳位；2026-10-14 改为 JS 分列并经无头浏览器实测验证。
+- **交互模型 (2026-10-14 重设计)**：过滤是一等公民 —— `state.scope`(`comic`/`uploader`) + 文本搜索，
+  统一以 **sticky 过滤栏 chips** 显式呈现、可单独关闭；路由 `#/discover #/comics #/rank #/comic/<名> #/uploader/<ID>`，
+  点「发现」tab = 清除 scope；**任何过滤组合下无限滚动都继续翻页**（comic 服务端分页，uploader/搜索池内过滤+下滑扩池）；
+  `gen` 代际 token 丢弃 scope 切换时在途请求的过期结果；`layoutStale` 仅认列数/间距变化
+  （经典滚动条出现带来的宽度抖动不触发重排，否则每次 append 全版重摆只剩当批）。
+  面向用户的文案不含逆向/协议术语（"同源""服务端过滤"等已清除）。
 - **作品**：聚合索引网格 → 点击进入该作品服务端过滤流
 - **排行**：4 组 tab，与 APP 排行页同接口
 - **详情弹窗**：先缩略图、后台渐进加载**原图**（XOR 解码流）无缝替换；元数据/标签/Pixiv 链接/原图下载

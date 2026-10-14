@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>次元壁纸 · Web — 与 APP 同源数据</title>
-<meta name="description" content="次元壁纸 (me.alzz.awsl) 的非官方 Web 版：发现/作品/排行，与 APP 同源壁纸数据。">
+<title>次元壁纸</title>
+<meta name="description" content="次元壁纸 Web 版：发现 / 作品 / 排行。">
 <link rel="stylesheet" href="style.css">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌸</text></svg>">
 </head>
@@ -13,7 +13,6 @@
 <header class="topbar">
   <div class="brand">
     <span class="logo">次元壁纸</span>
-    <span class="sub">WEB · 同源数据</span>
   </div>
   <nav class="nav" id="nav">
     <button data-view="discover" class="active">发现</button>
@@ -32,13 +31,12 @@
 </header>
 
 <main>
-  <!-- 发现 / 作品详情流 -->
+  <!-- 发现 / 过滤流 -->
   <section class="view active" id="view-discover">
-    <div class="section-head" id="discover-head">
-      <button class="back-btn" id="comic-back" style="display:none">← 返回作品</button>
-      <div class="section-title" id="discover-title"><span class="grad">发现</span> 最新壁纸</div>
+    <div class="filter-bar" id="filter-bar">
+      <div class="fb-title" id="fb-title">最新壁纸</div>
+      <div class="fb-chips" id="fb-chips"></div>
       <span class="pill" id="discover-count"></span>
-      <span class="section-sub" id="search-hint" style="display:none"></span>
     </div>
     <div class="masonry" id="grid"></div>
   </section>
@@ -46,18 +44,16 @@
   <!-- 作品列表 -->
   <section class="view" id="view-comics">
     <div class="section-head">
-      <div class="section-title"><span class="grad">作品</span> 合集</div>
-      <span class="section-sub">按作品浏览（服务端过滤，与 APP 同源）· 索引来自最近 300 张</span>
+      <div class="section-title">作品合集</div>
     </div>
     <div class="comics-grid" id="comics-grid"></div>
-    <div class="load-state" id="comics-loading" style="display:none"><div class="spinner"></div>聚合最近壁纸中…</div>
+    <div class="load-state" id="comics-loading" style="display:none"><div class="spinner"></div>加载中…</div>
   </section>
 
   <!-- 排行 -->
   <section class="view" id="view-rank">
     <div class="section-head">
-      <div class="section-title"><span class="grad">排行</span></div>
-      <span class="section-sub">与 APP「排行」页同一接口</span>
+      <div class="section-title">排行</div>
     </div>
     <div class="rank-tabs" id="rank-tabs"></div>
     <div class="rank-list" id="rank-list"></div>
