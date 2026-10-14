@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { origOf, thumbOf } from '../api';
-import { closeModal, onSearch, setScope, state, useV } from '../store';
+import { closeModal, onSearch, setScope, state, toast, useV } from '../store';
 
 const fmtDate = (ms: number) => {
   const d = new Date(ms);
@@ -11,6 +11,7 @@ export function ModalView() {
   useV();
   const w = state.modal;
   const [origState, setOrigState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [dl, setDl] = useState<'idle' | 'packing'>('idle');
   useEffect(() => {
     if (!w) return;
     setOrigState('loading');
@@ -30,6 +31,33 @@ export function ModalView() {
   if (!w) return null;
 
   const pixivNum = w.pixivId && /^\d{1,10}$/.test(String(w.pixivId));
+
+  // iOS 主屏幕(standalone)模式无下载管理器 UI, <a download> 静默失败;
+  // 改为 fetch → 系统分享面板(存照片/文件/AirDrop), 普通浏览器回落 blob 下载。
+  const downloadOrig = async () => {
+    if (dl !== 'idle') return;
+    setDl('packing');
+    try {
+      const r = await fetch(origOf(w));
+      if (!r.ok) throw new Error(String(r.status));
+      const blob = await r.blob();
+      const name = `${w.comic || 'ciyuan'}_${w.id.slice(0, 8)}.webp`;
+      const file = new File([blob], name, { type: 'image/webp' });
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file], title: w.comic || w.author || '次元壁纸' });
+      } else {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = name;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+      }
+    } catch (e) {
+      if ((e as Error).name !== 'AbortError') toast('下载失败: ' + (e as Error).message, true);
+    } finally {
+      setDl('idle');
+    }
+  };
   const rows: [string, React.ReactNode][] = [
     ['作者', w.author || '匿名'],
     ['分类', w.comic
@@ -83,7 +111,9 @@ export function ModalView() {
             ))}
           </div>
           <div className="side-actions">
-            <a className="btn btn-primary" href={origOf(w)} download={`${w.comic || 'ciyuan'}_${w.id.slice(0, 8)}.webp`}>⬇ 下载原图</a>
+            <button className="btn btn-primary" disabled={dl !== 'idle'} onClick={() => void downloadOrig()}>
+              {dl === 'packing' ? '⏳ 原图打包中…' : '⬇ 下载原图'}
+            </button>
             {pixivNum && (
               <a className="btn btn-ghost" href={`https://www.pixiv.net/artworks/${w.pixivId}`} target="_blank" rel="noopener" title="原作可能已被删除或转为私有">Pixiv 来源 ↗</a>
             )}
