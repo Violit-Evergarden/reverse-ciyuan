@@ -1,0 +1,179 @@
+// 全局状态 + actions (外部 store + useSyncExternalStore, 零依赖)。
+// 交互模型: tab = 首页/分类/排行; 流视图承载 scope (null|comic|uploader|search);
+// 每个 scope 独立缓存 {pool,seen,cursor,done}, 切换瞬时恢复+游标续载;
+// gen 代际 token 丢弃 scope 切换时在途请求的过期结果。
+import { useSyncExternalStore } from 'react';
+import { apiComics, apiRank, apiSearch, apiStatus, apiWallpapers, ApiError } from './api';
+import type { Comic, RankGroup, Scope, View, Wallpaper } from './types';
+
+interface Cache { pool: Wallpaper[]; seen: Set<string>; cursor: string | null; done: boolean }
+interface Toast { id: number; msg: string; err: boolean }
+
+export const state = {
+  view: 'home' as View,
+  scope: null as Scope,
+  query: '',
+  caches: new Map<string, Cache>(),
+  cache: null as unknown as Cache,
+  loading: false,
+  gen: 0,
+  serverSearch: null as boolean | null,
+  rank: null as { items: RankGroup[] } | null,
+  rankTab: 0,
+  comics: null as Comic[] | null,
+  hideR16: localStorage.getItem('ciyuan_hideR16') === '1',
+  modal: null as Wallpaper | null,
+  toasts: [] as Toast[],
+};
+
+let version = 0;
+const listeners = new Set<() => void>();
+const subscribe = (l: () => void) => { listeners.add(l); return () => { listeners.delete(l); }; };
+const getVersion = () => version;
+export const bump = () => { version++; listeners.forEach((l) => l()); };
+export const useV = () => useSyncExternalStore(subscribe, getVersion);
+
+// ---------- scope / cache ----------
+export const scopeKey = (sc: Scope) => (!sc ? 'global' : `${sc.type}:${sc.value}`);
+function cacheFor(sc: Scope): Cache {
+  const k = scopeKey(sc);
+  let c = state.caches.get(k);
+  if (!c) { c = { pool: [], seen: new Set(), cursor: null, done: false }; state.caches.set(k, c); }
+  return c;
+}
+export const scopeHash = (sc: Scope) => !sc ? '#/home'
+  : sc.type === 'comic' ? `#/comic/${encodeURIComponent(sc.value)}`
+    : sc.type === 'uploader' ? `#/uploader/${encodeURIComponent(sc.value)}`
+      : `#/search/${encodeURIComponent(sc.value)}`;
+export const scopeFromHash = (h: string): Scope =>
+  h.startsWith('#/comic/') ? { type: 'comic', value: decodeURIComponent(h.slice(8)) }
+    : h.startsWith('#/uploader/') ? { type: 'uploader', value: decodeURIComponent(h.slice(11)) }
+      : h.startsWith('#/search/') ? { type: 'search', value: decodeURIComponent(h.slice(9)) }
+        : null;
+
+// ---------- 过滤 ----------
+export function matchQuery(w: Wallpaper, q: string) {
+  if (!q) return true;
+  q = q.toLowerCase();
+  return (w.author || '').toLowerCase().includes(q)
+    || (w.comic || '').toLowerCase().includes(q)
+    || (w.id || '').toLowerCase().startsWith(q)
+    || (w.tags || []).some((t) => t.toLowerCase().includes(q))
+    || (w.characters || []).some((t) => t.toLowerCase().includes(q))
+    || String(w.pixivId || '').includes(q);
+}
+export const inScope = (w: Wallpaper) => !state.scope
+  || (state.scope.type === 'comic' ? w.comic === state.scope.value
+    : state.scope.type === 'uploader' ? w.uploader === state.scope.value
+      : true); // search scope 已由服务端过滤
+export const visible = (w: Wallpaper) => !(state.hideR16 && w.isR16) && inScope(w) && matchQuery(w, state.query);
+
+// ---------- toast ----------
+let toastId = 0;
+export function toast(msg: string, err = false, ms = 3200) {
+  const t = { id: ++toastId, msg, err };
+  state.toasts.push(t); bump();
+  setTimeout(() => { state.toasts = state.toasts.filter((x) => x.id !== t.id); bump(); }, ms);
+}
+
+// ---------- 数据加载 ----------
+export async function fetchPage() {
+  const c = state.cache;
+  if (state.loading || c.done || state.view !== 'home') return;
+  const gen = state.gen;
+  state.loading = true; bump();
+  try {
+    const j = state.scope?.type === 'search'
+      ? await apiSearch(state.scope.value, c.cursor)
+      : await apiWallpapers(c.cursor, state.scope?.type === 'comic' ? state.scope.value : null);
+    if (gen !== state.gen) return;
+    const fresh = j.wallpapers.filter((w) => !c.seen.has(w.id));
+    fresh.forEach((w) => c.seen.add(w.id));
+    c.pool.push(...fresh);
+    c.cursor = j.nextCursor;
+    c.done = !j.nextCursor || j.count === 0;
+  } catch (e) {
+    if (gen !== state.gen) return;
+    toast('加载失败: ' + (e as Error).message, true);
+    state.loading = false; bump();
+    return;
+  }
+  if (gen !== state.gen) return;
+  state.loading = false; bump();
+}
+
+export function setScope(scope: Scope, { navigate = true } = {}) {
+  state.scope = scope;
+  state.loading = false; state.gen++;
+  state.cache = cacheFor(scope);
+  if (navigate && location.hash !== scopeHash(scope)) location.hash = scopeHash(scope);
+  state.view = 'home';
+  bump();
+  if (!state.cache.done) void fetchPage();
+}
+
+// ---------- 搜索 (有 Pro → 服务端 scope; 无 Pro → 池内过滤回落) ----------
+async function probeServerSearch(q: string) {
+  try {
+    await apiSearch(q, null);
+    state.serverSearch = true;
+  } catch (e) {
+    state.serverSearch = false;
+    if (e instanceof ApiError && e.code === -5) toast('服务端搜索需 Pro 账户，已用本地过滤', false, 2600);
+  }
+}
+export function onSearch(q: string) {
+  const t = q.trim();
+  if (state.serverSearch) {
+    setScope(t ? { type: 'search', value: t } : (state.scope?.type === 'search' ? null : state.scope));
+    return;
+  }
+  state.query = t;
+  if (state.view !== 'home') state.view = 'home';
+  bump();
+  if (t && state.serverSearch === null) void probeServerSearch(t).then(() => {
+    if (state.serverSearch && state.query) {
+      const kw = state.query; state.query = '';
+      setScope({ type: 'search', value: kw });
+    }
+  });
+}
+export function clearQuery() { state.query = ''; bump(); }
+
+// ---------- 其他 views ----------
+export async function loadRank() {
+  if (state.rank) return;
+  try { state.rank = (await apiRank()).data; } catch (e) { toast('排行加载失败: ' + (e as Error).message, true); }
+  bump();
+}
+export async function loadComics() {
+  if (state.comics) return;
+  try { state.comics = (await apiComics()).comics; } catch (e) { toast('分类聚合失败: ' + (e as Error).message, true); }
+  bump();
+}
+export function setRankTab(i: number) { state.rankTab = i; bump(); }
+export function toggleR16(v: boolean) {
+  state.hideR16 = v;
+  localStorage.setItem('ciyuan_hideR16', v ? '1' : '0');
+  bump();
+}
+export const openModal = (w: Wallpaper) => { state.modal = w; bump(); };
+export const closeModal = () => { state.modal = null; bump(); };
+
+// ---------- 路由 ----------
+export function applyHash(h: string) {
+  const sc = scopeFromHash(h);
+  if (sc) {
+    if (scopeHash(state.scope) !== scopeHash(sc)) setScope(sc, { navigate: false });
+    else { state.view = 'home'; bump(); }
+  } else if (h === '#/cats') { state.view = 'cats'; bump(); void loadComics(); }
+  else if (h === '#/rank') { state.view = 'rank'; bump(); void loadRank(); }
+  else if (state.scope) setScope(null, { navigate: false });
+  else { state.view = 'home'; bump(); }
+}
+
+// ---------- 启动 ----------
+state.cache = cacheFor(null);
+void apiStatus().then((j) => {
+  if (!j.hasToken && !j.hasAccount) toast('后端未配置账号，仅排行可用', true, 5000);
+}).catch(() => { /* 后端未起 */ });

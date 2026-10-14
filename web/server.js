@@ -24,7 +24,8 @@ const { URL, URLSearchParams } = require('node:url');
 const ROOT = __dirname;
 const SECRETS_PATH = path.join(ROOT, 'secrets.local.json');
 const CACHE_DIR = path.join(ROOT, '.cache');
-const PUBLIC_DIR = path.join(ROOT, 'public');
+// 前端产物: 优先 React 构建产物 web/dist (vite build), 回退旧版 public/
+const PUBLIC_DIR = fs.existsSync(path.join(ROOT, 'dist', 'index.html')) ? path.join(ROOT, 'dist') : path.join(ROOT, 'public');
 const PORT = Number(process.env.PORT || 8787);
 const HOST = process.env.HOST || '127.0.0.1';
 
@@ -319,7 +320,9 @@ async function serveStatic(req, res, pathname) {
     const st = await fsp.stat(fp);
     if (st.isDirectory()) fp = path.join(fp, 'index.html');
     const buf = await fsp.readFile(fp);
-    res.writeHead(200, { 'content-type': MIME[path.extname(fp)] || 'application/octet-stream', 'content-length': buf.length, 'cache-control': 'no-cache' });
+    // vite 产物带内容哈希 → 长缓存; 其余 no-cache
+    const cc = pathname.startsWith('/assets/') ? 'public, max-age=31536000, immutable' : 'no-cache';
+    res.writeHead(200, { 'content-type': MIME[path.extname(fp)] || 'application/octet-stream', 'content-length': buf.length, 'cache-control': cc });
     res.end(buf);
   } catch { res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' }); res.end('404'); }
 }
