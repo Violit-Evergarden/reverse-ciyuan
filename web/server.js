@@ -178,6 +178,9 @@ function signedPairs(pairs) { // pairs: [k,v][] → 排序去重 k=v (跳过空�
 }
 
 async function apiLogin() {
+  if (!SECRETS.account || !SECRETS.pwd) {
+    throw new Error('后端未配置账号: 编辑 web/secrets.local.json 填入 account+pwd (或直接填 token)');
+  }
   const form = { account: SECRETS.account, pwd: SECRETS.pwd };
   const { t, sign: sg } = signedPairs(Object.entries(form));
   const body = new URLSearchParams(form).toString();
