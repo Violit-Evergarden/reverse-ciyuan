@@ -393,3 +393,21 @@ systemd `ciyuan-web` → 127.0.0.1:8787; 入口 **https://www.violet37.cn**。
 **凭据纪律**: `web/secrets.local.json` (account/pwd/salt/token/gate) 与 `web/deploy.local.json`
 (ssh 目标/域名/gate) 均 gitignored; 服务器端 secrets 600; SSH 仅密钥 (PasswordAuthentication no);
 旧服务备份 `/root/old-backup-20261014.tgz`, mihomo 代理保留未动。
+
+### 11.1 部署实战细节 (2026-10-14, 腾讯云轻量上海)
+- 控制台自动化不可靠: 腾讯云 console SPA 在无头浏览器里启动 40–75s 且随机失败; **正路是 ssh**。
+  无 SSH 凭据时的一次性注入流程: 控制台重置密码(在线重置不关机) → `expect` 跑一次
+  `ssh + sudo` 把开发机 `id_ed25519.pub` 写进 ubuntu/root 的 `authorized_keys` → 之后全程密钥直连;
+  注入完成立即 `PasswordAuthentication no` 废止临时密码。
+- 旧服务清理纪律: 先 `tar czf /root/old-backup-<date>.tgz` 再停删(systemd disable --now /
+  pm2 delete + save / 摘 nginx sites-enabled); 用途不明的常驻进程(如 mihomo)**默认保留**, 清单给用户确认。
+- nginx 1.18 (Ubuntu 22.04 默认) 不认独立 `http2 on;` 指令 → 必须 `listen 443 ssl http2;`。
+- 已有 Let's Encrypt 证书时直接复用 `/etc/letsencrypt/live/<域>/`(certbot 续期链不动); 无证书才走
+  `certbot --nginx` 新签; ACME challenge 路径要 `auth_basic off`。
+- 健康检查/脚本访问带门禁站点: `curl -c jar -d code=<gate> https://<域>/gate` 换 cookie 后 `-b jar`。
+- **mihomo(Clash)共存确认**: 仅 loopback 监听、无 tun 段/无 tun 设备/无代理环境变量/出口 IP=自身公网 IP →
+  本站流量直连不经代理; Node 原生 http/https 不读 proxy 环境变量, 双重保险。若未来误开 TUN:
+  `ip link | grep tun` + config `tun:` 段确认 → `tun.enable:false` 或对上游域名加 DIRECT 规则 → restart mihomo。
+- 无头验证注意: CDP 网络限速**不作用于 loopback**, 测加载进度环等慢路径要用线上域名;
+  `resize_page` 在窗口被系统夹小时失真, 用 `emulate viewport` 更可靠; 合成 PointerEvent 的
+  `setPointerCapture` 会抛 NotFoundError(代码已 try/catch, 写测试时无需处理)。
