@@ -25,6 +25,7 @@ node server.js            # → http://127.0.0.1:8787  (PORT/HOST 环境变量�
 |---|---|---|
 | `GET /api/rank` | 排行 4 组×10 | `GET /rank` (t+sign 头) |
 | `GET /api/wallpapers?cursor=&comic=` | 首页流 100/页, 游标=上页末条 createdAt | `POST /channel` LoadWallpaperReq |
+| `GET /api/search?keyword=&cursor=` | 服务端真搜索 (**需 Pro**; 非 Pro 返回 code=-5, 前端回落本地过滤) | `POST /channel` SearchWallpaperReq |
 | `GET /api/comics` | 作品索引 (聚合最近 3 页) | 同上 (本地聚合) |
 | `GET /api/img/thumb?u=` | 缩略图代理 (imgdb 302→百度CDN / bitiful http; **必须无 Referer**) | `GET <thumbUrl>` |
 | `GET /api/img/orig?u=` | 原图代理: 下载 `*.a` → 单字节 XOR (`key=raw[0]^0x52`) → webp | `GET <url>` |
@@ -42,12 +43,13 @@ API 内存缓存（rank 10min / wallpapers 5min / comics 30min）。
   + IntersectionObserver 无限滚动（游标分页）+ 懒加载骨架屏。
   ⚠️ 历史坑：初版用 CSS multi-column（`columns: 5 280px`）是**列优先**填充且 append 时全版重新均衡，
   视觉顺序 ≠ 数据顺序（首屏一行实为第 1/21/41/60/79 条）且已显示卡片跳位；2026-10-14 改为 JS 分列并经无头浏览器实测验证。
-- **交互模型 (2026-10-14 重设计)**：过滤是一等公民 —— `state.scope`(`comic`/`uploader`) + 文本搜索，
-  统一以 **sticky 过滤栏 chips** 显式呈现、可单独关闭；路由 `#/discover #/comics #/rank #/comic/<名> #/uploader/<ID>`，
-  点「发现」tab = 清除 scope；**任何过滤组合下无限滚动都继续翻页**（comic 服务端分页，uploader/搜索池内过滤+下滑扩池）；
-  `gen` 代际 token 丢弃 scope 切换时在途请求的过期结果；`layoutStale` 仅认列数/间距变化
-  （经典滚动条出现带来的宽度抖动不触发重排，否则每次 append 全版重摆只剩当批）。
-  面向用户的文案不含逆向/协议术语（"同源""服务端过滤"等已清除）。
+- **交互模型 (2026-10-14 v2)**：tab = **首页**(全局最新流, 默认落地) / **分类**(索引) / **排行**；
+  流视图承载 scope：`null` 全局 | `comic` 分类(**服务端过滤分页**) | `uploader`(池内过滤+下滑扩池) |
+  `search`(**服务端真搜索, 仅 Pro**; 启动后首次搜索自动探测, 非 Pro(`-5`)回落本地池内过滤并 toast 提示)。
+  **每个 scope 独立缓存** {pool,seen,cursor,done}：切换瞬时恢复、游标续载、互不清除(修复"去分类后全局流重置")。
+  过滤以 sticky 过滤栏 chips 显式呈现、可单独关闭；点「首页」tab = 回全局流；
+  路由 `#/home #/cats #/rank #/comic/<名> #/uploader/<ID> #/search/<词>`；`gen` 代际 token 丢弃在途请求过期结果；
+  `layoutStale` 仅认列数/间距变化(经典滚动条宽度抖动不触发重排)。面向用户文案不含逆向/协议术语。
 - **作品**：聚合索引网格 → 点击进入该作品服务端过滤流
 - **排行**：4 组 tab，与 APP 排行页同接口
 - **详情弹窗**：先缩略图、后台渐进加载**原图**（XOR 解码流）无缝替换；元数据/标签/Pixiv 链接/原图下载

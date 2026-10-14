@@ -1,12 +1,12 @@
 /* 次元壁纸 Web — 前端逻辑 (ES module, 零依赖)
  *
- * 交互模型 (2026-10-14 重设计):
- *  - 三个 tab: 发现(全局最新流) / 作品(分类索引) / 排行。
- *  - 过滤是一等公民: state.scope = {type:'comic'|'uploader', value} + state.query(文本搜索),
- *    全部以 sticky 过滤栏上的 chip 显式呈现、可单独关闭; 关闭即回全局流。
- *  - 路由: #/discover #/comics #/rank #/comic/<名> #/uploader/<ID>; 点「发现」tab = 清除 scope。
- *  - 无限滚动在任何过滤组合下都继续翻页: comic 走服务端过滤分页; uploader/搜索为池内过滤,
- *    下滑自动扩大已加载池。
+ * 交互模型 (2026-10-14 v2):
+ *  - tab: 首页(全局最新流, 默认落地) / 分类(索引) / 排行。
+ *  - 流视图承载任意 scope: null(全局) | comic(分类, 服务端过滤分页) |
+ *    uploader(池内过滤) | search(服务端搜索, 仅 Pro 账号可用, 自动探测)。
+ *  - 每个 scope 独立缓存 {pool,seen,cursor,done}: 切换瞬时恢复、游标续载, 互不清除。
+ *  - 过滤以 sticky 过滤栏 chips 显式呈现、可单独关闭; 点「首页」tab = 回全局流。
+ *  - 路由: #/home #/cats #/rank #/comic/<名> #/uploader/<ID> #/search/<词>。
  */
 
 // ---------- 工具 ----------
@@ -21,7 +21,7 @@ function esc(s) { return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 async function api(path) {
   const r = await fetch(path);
   const j = await r.json();
-  if (j.code !== 0) throw new Error(j.msg || `API 错误 (${j.code})`);
+  if (j.code !== 0) { const e = new Error(j.msg || `API 错误 (${j.code})`); e.code = j.code; throw e; }
   return j;
 }
 function toast(msg, isErr = false, ms = 3200) {
@@ -34,21 +34,25 @@ function toast(msg, isErr = false, ms = 3200) {
 
 // ---------- 状态 ----------
 const state = {
-  view: 'discover',          // discover | comics | rank
-  scope: null,               // null | {type:'comic'|'uploader', value}
-  query: '',                 // 文本搜索 (池内)
-  cursor: null,              // 分页游标 (null=最新)
+  view: 'home',              // home | cats | rank
+  scope: null,               // null | {type:'comic'|'uploader'|'search', value}
+  query: '',                 // 本地池内过滤 (无 Pro 时的搜索回落)
+  caches: new Map(),         // scopeKey -> {pool, seen, cursor, done}
+  cache: null,               // 当前 scope 的缓存
   loading: false,
-  done: false,
   gen: 0,                    // 代际: scope 切换自增, 丢弃在途请求的过期结果
-  pool: [],                  // 当前 scope 已加载的壁纸 (搜索池)
-  seen: new Set(),
-  rank: null,                // {items:[{title,wallpapers}]}
-  rankTab: 0,
+  serverSearch: null,        // null=未探测 true=Pro 可用 false=需 Pro
+  rank: null, rankTab: 0,
   comics: null,              // [{name,count,thumbUrl}]
   hideR16: localStorage.getItem('ciyuan_hideR16') === '1',
   modal: null,
 };
+const scopeKey = (sc) => !sc ? 'global' : `${sc.type}:${sc.value}`;
+function cacheFor(sc) {
+  const k = scopeKey(sc);
+  if (!state.caches.has(k)) state.caches.set(k, { pool: [], seen: new Set(), cursor: null, done: false });
+  return state.caches.get(k);
+}
 
 // ---------- 过滤 ----------
 function matchQuery(w, q) {
@@ -62,13 +66,15 @@ function matchQuery(w, q) {
     || String(w.pixivId || '').includes(q);
 }
 const inScope = (w) => !state.scope
-  || (state.scope.type === 'comic' ? w.comic === state.scope.value : w.uploader === state.scope.value);
+  || (state.scope.type === 'comic' ? w.comic === state.scope.value
+    : state.scope.type === 'uploader' ? w.uploader === state.scope.value
+      : true); // search scope 已由服务端过滤
 const visible = (w) => !(state.hideR16 && w.isR16) && inScope(w) && matchQuery(w, state.query);
 
 // ---------- 瀑布流布局 (复刻 APP StaggeredGridLayoutManager 语义) ----------
-// CSS multi-column 是"列优先"填充, 视觉顺序 ≠ 数据顺序且 append 时整版重排;
-// 改为自维护 N 列: 每张卡放入累计高度最矮的列 → 行优先、只追加不重排;
-// 卡高由数据 width/height 先算, 图加载不回流。
+// CSS multi-column 列优先且 append 全版重排, 视觉顺序 ≠ 数据顺序; 改为自维护 N 列,
+// 每卡入累计高度最矮列 → 行优先、只追加不重排; 卡高由 width/height 先算, 不回流。
+// layoutStale 仅认列数/间距变化: 经典滚动条出现的 ~10px 宽度抖动不得触发重排。
 const MAS = { ideal: 280, gapDesk: 14, gapMobile: 10, maxCols: 5 };
 function masonrySpec(width) {
   if (window.innerWidth <= 900) return { n: 2, gap: MAS.gapMobile };
@@ -98,8 +104,6 @@ function buildLayout() {
 }
 const layoutStale = () => {
   if (!layout || !layout.cols[0].el.isConnected) return true;
-  // 仅列数/间距变化才算过期: 滚动条出现带来的 ~10px 宽度抖动不应触发重排
-  // (经典滚动条环境下每次 append 都重排会只剩当批卡片)
   const { n, gap } = masonrySpec(gridWidth());
   return n !== layout.n || gap !== layout.gap;
 };
@@ -133,9 +137,9 @@ function cardEl(w) {
   return card;
 }
 
-function renderPool() { // 全量重排 (搜索/R16/resize)
+function renderPool() { // 全量重摆 (切 scope 恢复 / 搜索 / R16 / resize)
   buildLayout();
-  for (const w of state.pool) if (visible(w)) placeCard(w);
+  for (const w of state.cache.pool) if (visible(w)) placeCard(w);
   updateCountPill();
 }
 function appendCards(list) { // 增量追加: 已显示的卡不移动
@@ -144,55 +148,64 @@ function appendCards(list) { // 增量追加: 已显示的卡不移动
   updateCountPill();
 }
 function updateCountPill() {
-  const vis = state.pool.filter(visible).length;
-  $('#discover-count').innerHTML = vis === state.pool.length
-    ? `已加载 <b>${state.pool.length}</b>`
-    : `<b>${vis}</b> / ${state.pool.length}`;
+  const pool = state.cache?.pool || [];
+  const vis = pool.filter(visible).length;
+  $('#discover-count').innerHTML = vis === pool.length
+    ? `已加载 <b>${pool.length}</b>`
+    : `<b>${vis}</b> / ${pool.length}`;
 }
 
 // ---------- 过滤栏 (sticky, 过滤上下文的唯一可见载体) ----------
 function renderFilterBar() {
   const chips = [];
   if (state.scope) {
-    chips.push({
-      k: 'scope',
-      label: state.scope.type === 'comic' ? `作品「${state.scope.value}」` : `上传者 ${state.scope.value.slice(0, 10)}…`,
-      title: state.scope.type === 'comic' ? '点击取消作品过滤' : '点击取消上传者过滤',
-    });
+    const label = state.scope.type === 'comic' ? `分类「${state.scope.value}」`
+      : state.scope.type === 'search' ? `搜索「${state.scope.value}」`
+        : `上传者 ${state.scope.value.slice(0, 10)}…`;
+    chips.push({ k: 'scope', label, title: '点击取消该过滤' });
   }
-  if (state.query) chips.push({ k: 'query', label: `搜索「${state.query}」`, title: '点击清除搜索' });
+  if (state.query) chips.push({ k: 'query', label: `过滤「${state.query}」`, title: '点击清除池内过滤' });
   $('#fb-chips').innerHTML = chips.map((c) => `<button class="fb-chip" data-k="${c.k}" title="${esc(c.title)}">${esc(c.label)} ✕</button>`).join('');
   $('#fb-chips').querySelectorAll('.fb-chip').forEach((b) => {
     b.onclick = () => {
-      if (b.dataset.k === 'scope') setScope(null);
-      else { $('#search-input').value = ''; onSearch(''); }
+      if (b.dataset.k === 'scope') {
+        if (state.scope?.type === 'search') { $('#search-input').value = ''; }
+        setScope(null);
+      } else { $('#search-input').value = ''; state.query = ''; renderFilterBar(); renderPool(); }
     };
   });
   $('#fb-title').textContent = state.scope
-    ? (state.scope.type === 'comic' ? state.scope.value : '上传者流')
+    ? (state.scope.type === 'search' ? `搜索: ${state.scope.value}` : state.scope.value)
     : '最新壁纸';
   updateCountPill();
 }
 
 // ---------- 数据加载 ----------
 async function fetchPage() {
-  if (state.loading || state.done || state.view !== 'discover') return;
+  const c = state.cache;
+  if (state.loading || c.done || state.view !== 'home') return;
   const gen = state.gen;
   state.loading = true;
   $('#loader').style.display = '';
   try {
     const qs = new URLSearchParams();
-    if (state.cursor) qs.set('cursor', state.cursor);
-    if (state.scope?.type === 'comic') qs.set('comic', state.scope.value); // 服务端过滤; uploader/搜索为池内
-    const j = await api(`/api/wallpapers?${qs}`);
+    if (c.cursor) qs.set('cursor', c.cursor);
+    let j;
+    if (state.scope?.type === 'search') {
+      qs.set('keyword', state.scope.value);
+      j = await api(`/api/search?${qs}`);       // 服务端搜索 (Pro)
+    } else {
+      if (state.scope?.type === 'comic') qs.set('comic', state.scope.value); // 服务端分类过滤
+      j = await api(`/api/wallpapers?${qs}`);   // uploader/本地过滤为池内, 靠下滑扩池
+    }
     if (gen !== state.gen) return; // 请求在途时 scope 已切换: 整体丢弃
-    const fresh = j.wallpapers.filter((w) => !state.seen.has(w.id));
-    fresh.forEach((w) => state.seen.add(w.id));
-    state.pool.push(...fresh);
+    const fresh = j.wallpapers.filter((w) => !c.seen.has(w.id));
+    fresh.forEach((w) => c.seen.add(w.id));
+    c.pool.push(...fresh);
     appendCards(fresh);
-    state.cursor = j.nextCursor;
-    state.done = !j.nextCursor || j.count === 0;
-    if (state.done && !state.pool.length) showEmpty();
+    c.cursor = j.nextCursor;
+    c.done = !j.nextCursor || j.count === 0;
+    if (c.done && !c.pool.length) showEmpty();
   } catch (e) {
     if (gen !== state.gen) return;
     toast('加载失败: ' + e.message, true);
@@ -210,19 +223,22 @@ function showEmpty() {
   $('#grid').innerHTML = `<div class="empty-state"><div class="big">🌌</div><p>没有匹配的壁纸<br>换个关键词，或下滑加载更多数据</p></div>`;
 }
 
-// ---------- scope 切换 (过滤上下文的唯一入口) ----------
-const scopeHash = (sc) => sc ? (sc.type === 'comic' ? `#/comic/${enc(sc.value)}` : `#/uploader/${enc(sc.value)}`) : '#/discover';
-const sameScope = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+// ---------- scope 切换 (过滤上下文的唯一入口; 各 scope 缓存互不清除) ----------
+const scopeHash = (sc) => !sc ? '#/home'
+  : sc.type === 'comic' ? `#/comic/${enc(sc.value)}`
+    : sc.type === 'uploader' ? `#/uploader/${enc(sc.value)}`
+      : `#/search/${enc(sc.value)}`;
 function setScope(scope, { navigate = true } = {}) {
   state.scope = scope;
-  state.cursor = null; state.done = false; state.pool = []; state.seen.clear();
-  state.loading = false; state.gen++;   // 在途请求结果作废, 新 scope 立即可取数
+  state.loading = false; state.gen++;   // 在途请求结果作废
+  state.cache = cacheFor(scope);
   layout = null;
   $('#grid').innerHTML = '';
   if (navigate && location.hash !== scopeHash(scope)) location.hash = scopeHash(scope);
-  switchView('discover');
+  switchView('home');
   renderFilterBar();
-  fetchPage();
+  if (state.cache.pool.length) renderPool();  // 瞬时恢复已加载内容
+  if (!state.cache.done) fetchPage();         // 首进或未加载完 → 续载
 }
 
 // ---------- 排行 ----------
@@ -262,7 +278,7 @@ function renderRank() {
   });
 }
 
-// ---------- 作品 ----------
+// ---------- 分类 ----------
 async function loadComics() {
   if (state.comics) { renderComics(); return; }
   $('#comics-loading').style.display = '';
@@ -270,7 +286,7 @@ async function loadComics() {
     const j = await api('/api/comics');
     state.comics = j.comics;
     renderComics();
-  } catch (e) { toast('作品聚合失败: ' + e.message, true); }
+  } catch (e) { toast('分类聚合失败: ' + e.message, true); }
   $('#comics-loading').style.display = 'none';
 }
 function renderComics() {
@@ -301,7 +317,7 @@ function openModal(w) {
   $('#m-title').textContent = w.comic || w.author || '壁纸';
   const rows = [
     ['作者', esc(w.author || '匿名')],
-    ['作品', w.comic ? `<button class="linklike" data-scope="comic" data-v="${esc(w.comic)}">「${esc(w.comic)}」全部</button>` : '—'],
+    ['分类', w.comic ? `<button class="linklike" data-scope="comic" data-v="${esc(w.comic)}">「${esc(w.comic)}」全部</button>` : '—'],
     ['尺寸', fmtSize(w.width, w.height)],
     ['Pixiv ID', w.pixivId ? (/^\d{1,10}$/.test(String(w.pixivId))
       ? `<a href="https://www.pixiv.net/artworks/${w.pixivId}" target="_blank" rel="noopener" title="原作可能已被删除或转为私有">${w.pixivId} ↗</a>`
@@ -367,31 +383,52 @@ function switchView(v) {
   document.querySelectorAll('#nav button').forEach((b) => b.classList.toggle('active', b.dataset.view === v));
 }
 const scopeFromHash = (h) => h.startsWith('#/comic/') ? { type: 'comic', value: decodeURIComponent(h.slice(8)) }
-  : h.startsWith('#/uploader/') ? { type: 'uploader', value: decodeURIComponent(h.slice(11)) } : null;
+  : h.startsWith('#/uploader/') ? { type: 'uploader', value: decodeURIComponent(h.slice(11)) }
+    : h.startsWith('#/search/') ? { type: 'search', value: decodeURIComponent(h.slice(9)) } : null;
 function applyHash() {
-  const h = location.hash || '#/discover';
+  const h = location.hash || '#/home';
   const sc = scopeFromHash(h);
   if (sc) {
-    if (!sameScope(sc, state.scope)) setScope(sc, { navigate: false });
-    else switchView('discover');
-  } else if (h === '#/comics') { switchView('comics'); loadComics(); }
+    if (scopeHash(state.scope) !== scopeHash(sc)) setScope(sc, { navigate: false });
+    else switchView('home');
+  } else if (h === '#/cats') { switchView('cats'); loadComics(); }
   else if (h === '#/rank') { switchView('rank'); loadRank(); }
-  else if (state.scope) setScope(null, { navigate: false }); // 点「发现」= 回全局流
-  else switchView('discover');
+  else if (state.scope) setScope(null, { navigate: false }); // 点「首页」= 回全局流
+  else switchView('home');
 }
 window.addEventListener('hashchange', applyHash);
 document.querySelectorAll('#nav button').forEach((b) => {
   b.onclick = () => { location.hash = '#/' + b.dataset.view; };
 });
 
-// ---------- 搜索 (池内过滤) ----------
+// ---------- 搜索 (有 Pro → 服务端搜索 scope; 无 Pro → 池内过滤回落) ----------
 let searchTimer = null;
+async function probeServerSearch(q) {
+  try {
+    await api(`/api/search?keyword=${enc(q)}`);
+    state.serverSearch = true;
+  } catch (e) {
+    state.serverSearch = false;
+    if (e.code === -5) toast('服务端搜索需 Pro 账户，已用本地过滤', false, 2600);
+  }
+}
 function onSearch(q) {
-  state.query = q.trim();
-  $('#searchbox').classList.toggle('has-value', !!state.query);
-  if (state.view !== 'discover') switchView('discover');
+  const t = q.trim();
+  $('#searchbox').classList.toggle('has-value', !!t);
+  if (state.serverSearch) { // Pro: 搜索 = 服务端 scope (真搜索, 分页)
+    setScope(t ? { type: 'search', value: t } : (state.scope?.type === 'search' ? null : state.scope));
+    return;
+  }
+  state.query = t;
+  if (state.view !== 'home') switchView('home');
   renderFilterBar();
   renderPool();
+  if (t && state.serverSearch === null) probeServerSearch(t).then(() => {
+    if (state.serverSearch && state.query) { // 探测发现可用: 升级为服务端搜索
+      const kw = state.query; state.query = ''; $('#search-input').value = kw;
+      setScope({ type: 'search', value: kw });
+    }
+  });
 }
 $('#search-input').addEventListener('input', (e) => {
   clearTimeout(searchTimer);
@@ -412,16 +449,17 @@ new IntersectionObserver((entries) => {
   if (entries[0].isIntersecting) fetchPage();
 }, { rootMargin: '800px' }).observe($('#sentinel'));
 
-// ---------- 窗宽变化: 仅列数/列宽真正改变时重排 ----------
+// ---------- 窗宽变化: 仅列数/间距真正改变时重排 ----------
 let rsTimer = null;
 window.addEventListener('resize', () => {
   clearTimeout(rsTimer);
-  rsTimer = setTimeout(() => { if (state.view === 'discover' && layoutStale()) renderPool(); }, 150);
+  rsTimer = setTimeout(() => { if (state.view === 'home' && layoutStale()) renderPool(); }, 150);
 });
 
 // ---------- 启动 ----------
+state.cache = cacheFor(null);
 applyHash();
-if (state.view === 'discover' && !state.pool.length) fetchPage();
+if (state.view === 'home' && !state.cache.pool.length) fetchPage();
 api('/api/status').then((j) => {
   if (!j.hasToken && !j.hasAccount) toast('后端未配置账号，仅排行可用', true, 5000);
 }).catch(() => {});

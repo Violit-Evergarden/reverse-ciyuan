@@ -15,8 +15,8 @@
     <span class="logo">次元壁纸</span>
   </div>
   <nav class="nav" id="nav">
-    <button data-view="discover" class="active">发现</button>
-    <button data-view="comics">作品</button>
+    <button data-view="home" class="active">首页</button>
+    <button data-view="cats">分类</button>
     <button data-view="rank">排行</button>
   </nav>
   <div class="spacer"></div>
@@ -31,8 +31,8 @@
 </header>
 
 <main>
-  <!-- 发现 / 过滤流 -->
-  <section class="view active" id="view-discover">
+  <!-- 首页 / 过滤流 -->
+  <section class="view active" id="view-home">
     <div class="filter-bar" id="filter-bar">
       <div class="fb-title" id="fb-title">最新壁纸</div>
       <div class="fb-chips" id="fb-chips"></div>
@@ -41,10 +41,10 @@
     <div class="masonry" id="grid"></div>
   </section>
 
-  <!-- 作品列表 -->
-  <section class="view" id="view-comics">
+  <!-- 分类索引 -->
+  <section class="view" id="view-cats">
     <div class="section-head">
-      <div class="section-title">作品合集</div>
+      <div class="section-title">分类</div>
     </div>
     <div class="comics-grid" id="comics-grid"></div>
     <div class="load-state" id="comics-loading" style="display:none"><div class="spinner"></div>加载中…</div>

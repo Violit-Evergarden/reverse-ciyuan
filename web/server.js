@@ -249,6 +249,14 @@ const loadWallpapers = async ({ cursor = INT64_MAX, comic = '', landscape = 0, p
   return parseWallpapers(val);
 };
 
+// 服务端真搜索 (SearchWallpaperReq) — 需 Pro 账户; 非 Pro 返回 code=-5, 由前端回落本地过滤
+const searchWallpapers = async ({ cursor = INT64_MAX, keyword = '' } = {}) => {
+  const parts = [tVarint(1, cursor), tBytes(2, keyword)];
+  const val = await apiChannel('SearchWallpaperReq', Buffer.concat(parts));
+  if (!val) return [];
+  return parseWallpapers(val);
+};
+
 // ---------------- 图片: XOR 解码 + 缓存 ----------------
 function xorDecodeWebp(buf) {
   if (buf.length > 12 && buf.subarray(0, 4).toString('latin1') === 'RIFF') return buf; // 未混淆
@@ -330,6 +338,16 @@ const server = http.createServer(async (req, res) => {
       const comic = u.searchParams.get('comic') || '';
       const key = `wp:${cursorRaw || 'latest'}:${comic}`;
       const ws = await cacheWrap(key, 5 * 60e3, () => loadWallpapers({ cursor, comic }));
+      const next = ws.length ? String(ws[ws.length - 1].createdAt) : null;
+      return json(res, 0, { wallpapers: ws, nextCursor: next, count: ws.length });
+    }
+    if (p === '/api/search') {
+      const keyword = u.searchParams.get('keyword') || '';
+      if (!keyword) { res.writeHead(400); return res.end('keyword required'); }
+      const cursorRaw = u.searchParams.get('cursor');
+      const cursor = cursorRaw ? BigInt(cursorRaw) : INT64_MAX;
+      const key = `sr:${cursorRaw || 'latest'}:${keyword}`;
+      const ws = await cacheWrap(key, 5 * 60e3, () => searchWallpapers({ cursor, keyword }));
       const next = ws.length ? String(ws[ws.length - 1].createdAt) : null;
       return json(res, 0, { wallpapers: ws, nextCursor: next, count: ws.length });
     }
