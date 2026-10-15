@@ -23,6 +23,7 @@ export const state = {
   comics: null as Comic[] | null,
   hideR16: localStorage.getItem('ciyuan_hideR16') === '1',
   modal: null as Wallpaper | null,
+  save: null as { id: string; phase: 'idle' | 'waiting' | 'armed' } | null, // 保存意图 (见 save.ts)
   toasts: [] as Toast[],
 };
 

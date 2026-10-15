@@ -14,7 +14,7 @@ function Card({ w, d }: { w: Wallpaper; d: number }) {
   const [failed, setFailed] = useState(false);
   const ratio = (w.width && w.height) ? (w.height / w.width) : 1.414;
   return (
-    <div className={'card' + (first ? '' : ' no-anim')} style={{ animationDelay: `${d}ms` }} onClick={() => openModal(w)} onPointerDown={() => { ensureOrig(w).catch(() => { /* 弹窗/下载时再报 */ }); }}>
+    <div className={'card' + (first ? '' : ' no-anim')} style={{ animationDelay: `${d}ms` }} onClick={() => openModal(w)} onPointerDown={() => { ensureOrig(w, { prefetch: true }).catch(() => { /* 弹窗/下载时再报 */ }); }}>
       <div className="thumb-wrap" style={{ aspectRatio: `${(1 / ratio).toFixed(4)}` }}>
         {!loaded && !failed && <div className="skeleton" />}
         <img
