@@ -382,7 +382,7 @@ document.querySelector('form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const r = await fetch('/gate', { method: 'POST', body: new FormData(e.target) });
   if (r.redirected || r.ok) location.replace('/');
-  else document.querySelector('.e').textContent = '密码不对, 再试一次';
+  else document.querySelector('.e').textContent = '密码不对: 注意大小写, 已自动忽略首尾空格与全角字符';
 });
 // 带有效 cookie 落回本页 (如浏览器后退到缓存) → 直接放行
 fetch('/api/status').then((r) => { if (r.ok) location.replace('/'); }).catch(() => {});
@@ -411,8 +411,10 @@ const server = http.createServer(async (req, res) => {
     let body = '';
     req.on('data', (c) => { body += c; });
     req.on('end', () => {
-      const code = new URLSearchParams(body).get('code') || '';
-      if (SECRETS.gate && code === SECRETS.gate) {
+      // 容错: 复制粘贴常带尾空白/换行, 输入法易出全角 → trim + NFKC 归一后再比 (密码仍区分大小写)
+      const norm = (x) => String(x || '').trim().normalize('NFKC');
+      const code = norm(new URLSearchParams(body).get('code'));
+      if (SECRETS.gate && code === norm(SECRETS.gate)) {
         const exp = String(Date.now() + GATE_DAYS * 86400e3);
         res.writeHead(302, {
           'set-cookie': `cy_gate=${exp}.${gateHmac(exp)}; Path=/; Max-Age=${GATE_DAYS * 86400}; HttpOnly; Secure; SameSite=Lax`,
