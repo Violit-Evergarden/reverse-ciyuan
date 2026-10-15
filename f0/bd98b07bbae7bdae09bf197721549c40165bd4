@@ -1,0 +1,19 @@
+docs/ciyuan_reverse_engineering_report.md
+  s_61c1ffba966784::t_14a93d4a20205f 419-428
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.49-trip",
+  "base_commit_sha": "f0bd98b07bbae7bdae09bf197721549c40165bd4",
+  "prompts": {},
+  "sessions": {
+    "s_61c1ffba966784": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "487d0a4a-1bb9-4f7f-bd4a-838c151ca894",
+        "model": "claude-opus-5.5"
+      },
+      "human_author": "qiaoyuanshi <qiaoyuanshi@trip.com>"
+    }
+  }
+}
