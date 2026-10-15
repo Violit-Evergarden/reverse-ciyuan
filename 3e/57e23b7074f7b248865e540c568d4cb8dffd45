@@ -1,0 +1,22 @@
+web/frontend/src/styles.css
+  s_61c1ffba966784::t_ed643ffc49f7ee 336-337
+web/frontend/src/components/ModalView.tsx
+  s_61c1ffba966784::t_ed643ffc49f7ee 14-17
+  s_61c1ffba966784::t_9f6b10fc2bd52d 122-123,126-136
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.49-trip",
+  "base_commit_sha": "3e57e23b7074f7b248865e540c568d4cb8dffd45",
+  "prompts": {},
+  "sessions": {
+    "s_61c1ffba966784": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "487d0a4a-1bb9-4f7f-bd4a-838c151ca894",
+        "model": "qwen3.8-max"
+      },
+      "human_author": "qiaoyuanshi <qiaoyuanshi@trip.com>"
+    }
+  }
+}
