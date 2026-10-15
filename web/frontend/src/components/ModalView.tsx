@@ -11,7 +11,10 @@ const fmtDate = (ms: number) => {
 
 // 显示降采样: 超大原图 (如 2775×5551, 解码位图 ~60MB) 直接上屏会在移动端累积爆内存;
 // 先 canvas 降到 ≤2048px 再显示, 原 blob 仅留给分享/下载。失败回落原图 URL。
-async function downscaleForDisplay(blob: Blob, maxDim = 2048): Promise<string | null> {
+// 显示上限 = 设备像素预算: 屏幕长边 × DPR (下限 2048) —— 再多像素屏幕也显示不出,
+// 却要吃数倍内存; 下载/分享始终是全分辨率原图 (故"保存的比显示的清晰"是预期且正确)。
+const displayCap = () => Math.max(2048, Math.round(Math.max(screen.width, screen.height) * (window.devicePixelRatio || 1)));
+async function downscaleForDisplay(blob: Blob, maxDim = displayCap()): Promise<string | null> {
   try {
     const bmp = await createImageBitmap(blob);
     try {
@@ -116,11 +119,21 @@ export function ModalView() {
       cancelled = true;
       // 加载中点过保存却关闭了弹窗: 加载完成后以带行动的 toast 承接 (点击=新手势, 合法拉起分享)
       if (armedRef.current && !getCachedOrig(w.id)) {
+        // 加载中点过保存却关了弹窗: 加载完成直接尝试拉起分享 (与弹窗内行为一致);
+        // 平台拒绝(手势过期)才降级为带"保存"行动按钮的 toast
         const target = w;
         ensureOrig(target).then((blob) => {
-          toast(`${target.comic || target.author || '壁纸'} 原图已就绪`, false, 9000, {
-            label: '保存',
-            fn: () => { shareBlob(target, blob).catch((e) => { if ((e as Error).name !== 'AbortError') toast('保存失败: ' + (e as Error).message, true); }); },
+          shareBlob(target, blob).catch((e) => {
+            const err = e as Error;
+            if (err.name === 'AbortError') return;
+            if (err.name === 'NotAllowedError') {
+              toast(`${target.comic || target.author || '壁纸'} 原图已就绪`, false, 9000, {
+                label: '保存',
+                fn: () => { shareBlob(target, blob).catch((e2) => { if ((e2 as Error).name !== 'AbortError') toast('保存失败: ' + (e2 as Error).message, true); }); },
+              });
+              return;
+            }
+            toast('保存失败: ' + err.message, true);
           });
         }).catch(() => { /* 失败不叨扰 */ });
       }

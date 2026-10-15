@@ -333,7 +333,8 @@ button:active, .card:active { transform: scale(.985); }
   .topbar .nav { order: 2; margin-left: auto; }
   .topbar .nav button { white-space: nowrap; }
   .topbar .spacer { display: none; }
-  .topbar .searchbox { order: 3; flex: 1 1 auto; width: auto; min-width: 0; }
+  .topbar .searchbox { order: 3; flex: 1 1 160px; width: auto; min-width: 0; }
+  .topbar .r16-chip { order: 4; flex-shrink: 0; margin-left: auto; }
   .topbar .toggle-r16 { order: 4; }
   .toggle-r16 span.label { display: none; }
   main { padding: 14px 12px calc(50px + env(safe-area-inset-bottom)); }
