@@ -1,21 +1,24 @@
 // 保存意图: 全局单一所有者, 与详情弹窗生命周期解耦。
-// 规则: 同一时刻最多一个保存任务; 原图就绪后只调用一次 share();
-// 被平台拒绝(手势过期 NotAllowedError)时降级为带"保存"按钮的 toast (点按 = 新手势)。
+//
+// iOS 平台规则 (决定一切行为的前提): navigator.share 只能在"用户刚触摸过"的短窗口内调用。
+//  - 原图在窗口内就绪 → 直接拉起分享面板 (一次点击完成)
+//  - 原图就绪时窗口已过 (冷加载慢 / 期间没有新的触摸) → share 抛 NotAllowedError
+//    此时任何代码都无法再自动拉起面板, 只能请用户再点一次: 用**常驻**行动 toast 承接,
+//    点击 = 新手势, 必然成功。弹窗开着时按钮同时进入脉冲态。
 import { ensureOrig, getCachedOrig } from './orig';
-import { bump, state, toast } from './store';
+import { bump, dismissToastKey, state, toast } from './store';
 import type { Wallpaper } from './types';
 
 export type SavePhase = 'idle' | 'waiting' | 'armed';
 
-let task: { id: string; seq: number } | null = null;
-let seq = 0;
+let task: { id: string } | null = null;
+const toastKey = (id: string) => `save:${id}`;
+const labelOf = (w: Wallpaper) => w.comic || w.author || '壁纸';
 
-const setPhase = (id: string | null, phase: SavePhase) => {
+function setPhase(id: string | null, phase: SavePhase) {
   state.save = id ? { id, phase } : null;
   bump();
-};
-
-const labelOf = (w: Wallpaper) => w.comic || w.author || '壁纸';
+}
 
 async function deliver(w: Wallpaper, blob: Blob) {
   const name = `${w.comic || 'ciyuan'}_${w.id.slice(0, 8)}.webp`;
@@ -37,18 +40,17 @@ async function deliver(w: Wallpaper, blob: Blob) {
 }
 
 async function attempt(w: Wallpaper, blob: Blob) {
+  dismissToastKey(toastKey(w.id));
   try {
     await deliver(w, blob);
     setPhase(null, 'idle');
   } catch (e) {
     const err = e as Error;
-    if (err.name === 'AbortError') { setPhase(null, 'idle'); return; } // 用户取消分享面板
+    if (err.name === 'AbortError') { setPhase(null, 'idle'); return; }
     if (err.name === 'NotAllowedError') {
-      // 手势时效已过: 弹窗开着 → 按钮脉冲; 弹窗关着 → 行动 toast
       setPhase(w.id, 'armed');
-      if (state.modal?.id !== w.id) {
-        toast(`${labelOf(w)} 原图已就绪`, false, 9000, { label: '保存', fn: () => void requestSave(w) });
-      }
+      // 常驻 (ms=0): 不会在用户没看到时自动消失
+      toast(`${labelOf(w)} · 原图已就绪`, false, 0, { label: '保存', fn: () => void requestSave(w) }, toastKey(w.id));
       return;
     }
     setPhase(null, 'idle');
@@ -56,19 +58,18 @@ async function attempt(w: Wallpaper, blob: Blob) {
   }
 }
 
-// 点"保存"的唯一入口 (按钮/行动 toast 共用)
+/** 保存的唯一入口 (详情按钮 / 承接 toast 共用) */
 export async function requestSave(w: Wallpaper) {
   const cached = getCachedOrig(w.id);
-  if (cached) { task = null; await attempt(w, cached); return; }
-  if (task?.id === w.id) return; // 已在等待同一张, 不重复挂意图
-  const my = { id: w.id, seq: ++seq };
+  if (cached) { if (task?.id === w.id) task = null; await attempt(w, cached); return; }
+  if (task?.id === w.id) return; // 同一张已在等待
+  const my = { id: w.id };
   task = my;
   setPhase(w.id, 'waiting');
   try {
-    // pin: 关闭弹窗后在首页滑动会触发卡片预取, 未钉住的请求会被 abort —— 这正是
-    // "关了弹窗就不拉起保存"的根因。保存意图下的请求必须钉住。
+    // pin: 保存意图下的请求不被首页卡片预取 abort
     const blob = await ensureOrig(w, { pin: true });
-    if (task !== my) return; // 被更新的保存请求取代
+    if (task !== my) return;
     task = null;
     await attempt(w, blob);
   } catch (e) {
@@ -77,4 +78,9 @@ export async function requestSave(w: Wallpaper) {
     setPhase(null, 'idle');
     toast('下载失败: ' + (e as Error).message, true);
   }
+}
+
+/** 用户重新打开该图详情时: 承接 toast 让位给详情内的脉冲按钮 */
+export function onModalOpened(id: string) {
+  if (state.save?.id === id && state.save.phase === 'armed') dismissToastKey(toastKey(id));
 }

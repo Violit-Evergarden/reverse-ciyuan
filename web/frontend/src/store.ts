@@ -7,7 +7,7 @@ import { apiComics, apiRank, apiSearch, apiStatus, apiWallpapers, ApiError } fro
 import type { Comic, RankGroup, Scope, View, Wallpaper } from './types';
 
 interface Cache { pool: Wallpaper[]; seen: Set<string>; cursor: string | null; done: boolean }
-interface Toast { id: number; msg: string; err: boolean; action?: { label: string; fn: () => void } }
+interface Toast { id: number; msg: string; err: boolean; action?: { label: string; fn: () => void }; key?: string; sticky?: boolean }
 
 export const state = {
   view: 'home' as View,
@@ -71,10 +71,22 @@ export const visible = (w: Wallpaper) => !(state.hideR16 && w.isR16) && inScope(
 
 // ---------- toast ----------
 let toastId = 0;
-export function toast(msg: string, err = false, ms = 3200, action?: { label: string; fn: () => void }) {
-  const t = { id: ++toastId, msg, err, action };
+/** ms=0 为常驻 toast: 需用户点行动按钮或 ✕ 才消失; key 相同的常驻 toast 只保留一条 */
+export function toast(msg: string, err = false, ms = 3200, action?: { label: string; fn: () => void }, key?: string) {
+  if (key) state.toasts = state.toasts.filter((x) => x.key !== key);
+  const t = { id: ++toastId, msg, err, action, key, sticky: ms === 0 };
   state.toasts.push(t); bump();
-  setTimeout(() => { state.toasts = state.toasts.filter((x) => x.id !== t.id); bump(); }, ms);
+  if (ms > 0) setTimeout(() => dismissToast(t.id), ms);
+  return t.id;
+}
+export function dismissToast(id: number) {
+  state.toasts = state.toasts.filter((x) => x.id !== id);
+  bump();
+}
+export function dismissToastKey(key: string) {
+  if (!state.toasts.some((x) => x.key === key)) return;
+  state.toasts = state.toasts.filter((x) => x.key !== key);
+  bump();
 }
 
 // ---------- 数据加载 ----------

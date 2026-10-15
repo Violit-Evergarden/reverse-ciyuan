@@ -3,7 +3,7 @@
 //   保存意图 → ../save (全局, 与弹窗生命周期解耦: 关闭弹窗不会丢失保存)
 import { useEffect, useState } from 'react';
 import { thumbOf } from '../api';
-import { requestSave } from '../save';
+import { onModalOpened, requestSave } from '../save';
 import { closeModal, onSearch, openModal, searchPool, setScope, state, useV, visible } from '../store';
 import { exceedsBudget, isDesktop, useOriginal, type Quality } from './modal/useOriginal';
 import { useStageGestures } from './modal/useStageGestures';
@@ -35,6 +35,7 @@ export function ModalView() {
     setSheet(false);
     setQuality('fit');
     gestures.reset();
+    if (w) onModalOpened(w.id);
   }, [w?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
