@@ -235,7 +235,7 @@ export function ModalView() {
             key={w.id}
             className={syncing ? 'loading-orig' : ''}
             src={origUrl || thumbOf(w)}
-            alt=""
+            alt={w.comic || w.author || '壁纸'}
             style={{ transform: `translate(${tf.x}px, ${tf.y}px) scale(${tf.s})` }}
           />
           {syncing && prog && (
@@ -285,8 +285,11 @@ export function ModalView() {
         </div>
         <div className="side-actions">
           <button className="btn btn-primary" onClick={() => void downloadOrig()}>
-            {syncing ? `⏳ 原图同步 ${prog?.total ? Math.round(pct * 100) + '%' : '…'}（点按保存）`
-              : origState === 'error' ? '↻ 重试下载原图' : '⬇ 下载原图'}
+            {syncing
+              ? <>原图同步 {prog?.total ? Math.round(pct * 100) + '%' : '…'}（点按保存）</>
+              : origState === 'error'
+                ? <><svg className="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 6.3" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /><path d="M20 5v6h-6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>重试下载原图</>
+                : <><svg className="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m0 0 4-4m-4 4-4-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /><path d="M5 19h14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>下载原图</>}
           </button>
           {pixivNum && (
             <a className="btn btn-ghost" href={`https://www.pixiv.net/artworks/${w.pixivId}`} target="_blank" rel="noopener" title="原作可能已被删除或转为私有">Pixiv 来源 ↗</a>

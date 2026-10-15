@@ -6,12 +6,12 @@ import { ensureOrig } from '../orig';
 import type { Wallpaper } from '../types';
 import { FilterBar } from './FilterBar';
 
-function Card({ w }: { w: Wallpaper }) {
+function Card({ w, d }: { w: Wallpaper; d: number }) {
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
   const ratio = (w.width && w.height) ? (w.height / w.width) : 1.414;
   return (
-    <div className="card" onClick={() => openModal(w)} onPointerDown={() => { ensureOrig(w).catch(() => { /* 弹窗/下载时再报 */ }); }}>
+    <div className="card" style={{ animationDelay: `${d}ms` }} onClick={() => openModal(w)} onPointerDown={() => { ensureOrig(w).catch(() => { /* 弹窗/下载时再报 */ }); }}>
       <div className="thumb-wrap" style={{ aspectRatio: `${(1 / ratio).toFixed(4)}` }}>
         {!loaded && !failed && <div className="skeleton" />}
         <img
@@ -71,10 +71,23 @@ export function HomeView() {
       <FilterBar />
       <div className="masonry" ref={wrapRef} style={{ columnGap: gap }}>
         {empty
-          ? <div className="empty-state"><div className="big">🌌</div><p>没有匹配的壁纸<br />换个关键词，或下滑加载更多数据</p></div>
+          ? (
+            <div className="empty-state">
+              <svg className="empty-mark" viewBox="0 0 24 24" aria-hidden="true">
+                <g fill="currentColor">
+                  <ellipse cx="12" cy="6.6" rx="3" ry="4.4" />
+                  <ellipse cx="12" cy="6.6" rx="3" ry="4.4" transform="rotate(72 12 12)" />
+                  <ellipse cx="12" cy="6.6" rx="3" ry="4.4" transform="rotate(144 12 12)" />
+                  <ellipse cx="12" cy="6.6" rx="3" ry="4.4" transform="rotate(216 12 12)" />
+                  <ellipse cx="12" cy="6.6" rx="3" ry="4.4" transform="rotate(288 12 12)" />
+                </g>
+              </svg>
+              <p>没有匹配的壁纸<br />换个关键词，或下滑加载更多数据</p>
+            </div>
+            )
           : cols.map((col, i) => (
             <div className="mcol" key={i}>
-              {col.map((it) => <Card key={it.id} w={it} />)}
+              {col.map((it, r) => <Card key={it.id} w={it} d={Math.min(i * 3 + r, 12) * 26} />)}
             </div>
           ))}
       </div>

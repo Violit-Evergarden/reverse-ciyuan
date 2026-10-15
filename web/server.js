@@ -348,7 +348,7 @@ const img = (res, buf, type = 'image/webp', ttl = 86400 * 7) => {
   res.end(buf);
 };
 
-const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.webp': 'image/webp', '.ico': 'image/x-icon', '.json': 'application/json; charset=utf-8' };
+const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.webp': 'image/webp', '.ico': 'image/x-icon', '.json': 'application/json; charset=utf-8', '.woff2': 'font/woff2', '.webmanifest': 'application/manifest+json' };
 
 // ---------------- 站点门禁 (cookie 会话, 180 天) ----------------
 // 取代 nginx Basic Auth: iOS 上 Basic Auth 凭据仅存内存, 杀 Safari/web clip 即失效;
@@ -400,7 +400,13 @@ async function serveStatic(req, res, pathname) {
     const cc = pathname.startsWith('/assets/') ? 'public, max-age=31536000, immutable' : (pathname === '/' || pathname === '/index.html' ? 'no-store' : 'no-cache');
     res.writeHead(200, { 'content-type': MIME[path.extname(fp)] || 'application/octet-stream', 'content-length': buf.length, 'cache-control': cc });
     res.end(buf);
-  } catch { res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' }); res.end('404'); }
+  } catch {
+    res.writeHead(404, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
+    res.end(`<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>页面不存在</title>
+<style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0b0e14;color:#eceff5;font-family:'Outfit','PingFang SC','Microsoft YaHei',system-ui,sans-serif}main{text-align:center}svg{width:64px;height:64px;color:#e58ab5;opacity:.85}h1{font-size:26px;letter-spacing:-.015em;margin:14px 0 6px}p{color:#99a2b4;font-size:14px;margin:0 0 20px}a{color:#e58ab5;text-decoration:none;border:1px solid rgba(229,138,181,.45);padding:9px 18px;border-radius:10px;font-weight:600}a:hover{background:rgba(184,67,122,.16)}</style></head>
+<body><main><svg viewBox="0 0 24 24"><g fill="currentColor"><ellipse cx="12" cy="6.6" rx="3" ry="4.4"/><ellipse cx="12" cy="6.6" rx="3" ry="4.4" transform="rotate(72 12 12)"/><ellipse cx="12" cy="6.6" rx="3" ry="4.4" transform="rotate(144 12 12)"/><ellipse cx="12" cy="6.6" rx="3" ry="4.4" transform="rotate(216 12 12)"/><ellipse cx="12" cy="6.6" rx="3" ry="4.4" transform="rotate(288 12 12)"/></g></svg>
+<h1>页面不存在</h1><p>地址可能已变更或从未存在</p><a href="/">回到首页</a></main></body></html>`);
+  }
 }
 
 const server = http.createServer(async (req, res) => {
