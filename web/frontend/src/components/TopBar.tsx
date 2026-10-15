@@ -21,7 +21,7 @@ export function TopBar() {
           <button
             key={v.key}
             className={state.view === v.key ? 'active' : ''}
-            onClick={() => { location.hash = '#/' + v.key; }}
+            onClick={() => { location.replace('#/' + v.key); }} // replace: tab 不压历史栈, 首页侧滑=退出应用
           >{v.label}</button>
         ))}
       </nav>

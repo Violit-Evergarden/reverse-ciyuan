@@ -36,6 +36,7 @@ export function ModalView() {
   const [prog, setProg] = useState<{ loaded: number; total: number } | null>(null);
   const [origUrl, setOrigUrl] = useState<string | null>(null);
   const [sheet, setSheet] = useState(false);            // 移动端信息/下载弹层
+  const [saveArmed, setSaveArmed] = useState(false);    // 加载中点过保存 → 就绪后脉冲提示
   const [tf, setTf] = useState({ s: 1, x: 0, y: 0 });   // 缩放/平移
   const blobRef = useRef<Blob | null>(null);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -51,6 +52,7 @@ export function ModalView() {
     let cancelled = false;
     setProg(null);
     setSheet(false);
+    setSaveArmed(false);
     setTf({ s: 1, x: 0, y: 0 });
     setOrigUrl(null); // 杜绝背景残留上一张
     blobRef.current = null;
@@ -177,29 +179,40 @@ export function ModalView() {
   const pct = prog && prog.total ? Math.min(1, prog.loaded / prog.total) : 0;
   const syncing = origState === 'loading';
 
-  // 下载 = 一次点击: blob 在手直接分享; 同步中点按 await 同一 in-flight, 完成即刻在手势窗口内分享;
-  // 仅当 iOS 因手势过期拒绝时按钮转脉冲态提示再点一次 (平台手势时效限制, 无法再省)。
+  // 下载/保存三态: blob 在手 → 手势内分享; 加载中被点按 → 记住意图, 加载完自动尝试分享,
+  // iOS 手势过期(NotAllowed)静默转"点按保存"脉冲态(平台限制, 不弹报错); 用户取消=静默;
+  // share() resolve = 保存/分享动作完成 → 成功提示 (Web 端能监听到的最精确信号)。
+  const shareOrDownload = async (blob: Blob) => {
+    const name = `${w.comic || 'ciyuan'}_${w.id.slice(0, 8)}.webp`;
+    const file = new File([blob], name, { type: 'image/webp' });
+    if (navigator.canShare?.({ files: [file] })) {
+      await navigator.share({ files: [file], title: w.comic || w.author || '次元壁纸' });
+      toast('保存完成', false, 2000);
+    } else {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = name;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      toast('已开始下载', false, 2000);
+    }
+  };
   const downloadOrig = async () => {
     let blob = getCachedOrig(w.id) || blobRef.current;
     if (!blob) {
-      try { blob = await ensureOrig(w); } catch (e) { setOrigState('error'); toast('下载失败: ' + (e as Error).message, true); return; }
+      setSaveArmed(true);
+      try { blob = await ensureOrig(w); } catch (e) { setSaveArmed(false); setOrigState('error'); toast('下载失败: ' + (e as Error).message, true); return; }
     }
-    const name = `${w.comic || 'ciyuan'}_${w.id.slice(0, 8)}.webp`;
-    const file = new File([blob], name, { type: 'image/webp' });
     try {
-      if (navigator.canShare?.({ files: [file] })) {
-        await navigator.share({ files: [file], title: w.comic || w.author || '次元壁纸' });
-      } else {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url; a.download = name;
-        document.body.appendChild(a); a.click(); a.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 5000);
-      }
+      await shareOrDownload(blob);
+      setSaveArmed(false);
       setOrigState('ready');
     } catch (e) {
-      if ((e as Error).name === 'AbortError') setOrigState('ready');
-      else { setOrigState('ready'); toast('保存失败: ' + (e as Error).message, true); }
+      const err = e as Error;
+      if (err.name === 'AbortError') { setSaveArmed(false); return; }
+      if (err.name === 'NotAllowedError') { setSaveArmed(true); setOrigState('ready'); return; }
+      setSaveArmed(false);
+      toast('保存失败: ' + err.message, true);
     }
   };
 
@@ -244,7 +257,7 @@ export function ModalView() {
                 <circle className="ring-bg" cx="20" cy="20" r="17" />
                 <circle className="ring-fg" cx="20" cy="20" r="17" strokeDasharray={2 * Math.PI * 17} strokeDashoffset={2 * Math.PI * 17 * (1 - pct)} />
               </svg>
-              <span>{prog.total ? `${Math.round(pct * 100)}%` : '…'}</span>
+              <span className="sr-pct">{prog.total ? `${Math.round(pct * 100)}%` : '…'}</span>
             </div>
           )}
           {origState === 'error' && (
@@ -284,12 +297,14 @@ export function ModalView() {
           ))}
         </div>
         <div className="side-actions">
-          <button className="btn btn-primary" onClick={() => void downloadOrig()}>
+          <button className={'btn btn-primary' + (saveArmed ? ' armed' : '')} onClick={() => void downloadOrig()}>
             {syncing
-              ? <>原图同步 {prog?.total ? Math.round(pct * 100) + '%' : '…'}（点按保存）</>
-              : origState === 'error'
-                ? <><svg className="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 6.3" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /><path d="M20 5v6h-6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>重试下载原图</>
-                : <><svg className="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m0 0 4-4m-4 4-4-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /><path d="M5 19h14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>下载原图</>}
+              ? <>原图同步 {prog?.total ? Math.round(pct * 100) + '%' : '…'}</>
+              : saveArmed
+                ? <><svg className="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m0 0 4-4m-4 4-4-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /><path d="M5 19h14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>原图已就绪 · 点按保存</>
+                : origState === 'error'
+                  ? <><svg className="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 6.3" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /><path d="M20 5v6h-6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>重试下载原图</>
+                  : <><svg className="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m0 0 4-4m-4 4-4-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /><path d="M5 19h14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>下载原图</>}
           </button>
           {pixivNum && (
             <a className="btn btn-ghost" href={`https://www.pixiv.net/artworks/${w.pixivId}`} target="_blank" rel="noopener" title="原作可能已被删除或转为私有">Pixiv 来源 ↗</a>
