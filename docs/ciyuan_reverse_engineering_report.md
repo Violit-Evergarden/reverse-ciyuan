@@ -416,3 +416,13 @@ systemd `ciyuan-web` → 127.0.0.1:8787; 入口 **https://www.violet37.cn**。
 - 无头验证注意: CDP 网络限速**不作用于 loopback**, 测加载进度环等慢路径要用线上域名;
   `resize_page` 在窗口被系统夹小时失真, 用 `emulate viewport` 更可靠; 合成 PointerEvent 的
   `setPointerCapture` 会抛 NotFoundError(代码已 try/catch, 写测试时无需处理)。
+
+### 11.2 详情弹窗重构教训 (2026-10-15)
+- **跨生命周期的用户意图不能挂在组件上**:"加载中点保存"的意图曾挂在弹窗 effect cleanup 里,
+  弹窗关闭后又被全局单飞预取 abort,承接被静默吞掉;连续三轮补丁都没碰到根因。
+  正解是 `save.ts` 全局单一所有者 + `orig.ts` 请求 pin(有保存意图的请求不被预取挤掉)。
+- 进度用订阅制(`watchProgress`)而非"全局唯一回调",天然不串图。
+- 组件按职责拆:`modal/useOriginal`(加载/画质/URL 回收)、`useStageGestures`、`useSheetDrag`、`parts`;
+  ModalView 只做组合(129 行)。
+- 慢路径验证方法:在页面里包一层 `window.fetch` 给 `/api/img/orig` 人为加延迟,
+  比依赖线上限速更可控(loopback 不受 CDP 限速)。
