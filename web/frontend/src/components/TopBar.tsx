@@ -44,14 +44,12 @@ export function TopBar() {
           onClick={() => { if (inputRef.current) inputRef.current.value = ''; onSearch(''); }}
         >✕</button>
       </div>
-      <label className="toggle-r16" title="隐藏 R16 内容">
-        <input
-          type="checkbox"
-          checked={state.hideR16}
-          onChange={(e) => toggleR16(e.target.checked)}
-        />
-        <span className="label">隐藏 R16</span>
-      </label>
+      <button
+        className={'r16-chip' + (state.hideR16 ? ' on' : '')}
+        aria-pressed={state.hideR16}
+        title="隐藏/显示 R16 内容"
+        onClick={() => toggleR16(!state.hideR16)}
+      ><span className="dot" />{state.hideR16 ? '已隐藏 R16' : '隐藏 R16'}</button>
     </header>
   );
 }

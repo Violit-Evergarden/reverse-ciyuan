@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { thumbOf } from '../api';
 import { ensureOrig, getCachedOrig } from '../orig';
+import type { Wallpaper } from '../types';
 import { closeModal, onSearch, openModal, setScope, state, toast, useV, visible } from '../store';
 
 const fmtDate = (ms: number) => {
@@ -29,6 +30,44 @@ async function downscaleForDisplay(blob: Blob, maxDim = 2048): Promise<string | 
   } catch { return null; }
 }
 
+// 分享/下载 blob (模块级: 弹窗关闭后的"就绪承接" toast 也能复用)
+async function shareBlob(w: Wallpaper, blob: Blob) {
+  const name = `${w.comic || 'ciyuan'}_${w.id.slice(0, 8)}.webp`;
+  const file = new File([blob], name, { type: 'image/webp' });
+  if (navigator.canShare?.({ files: [file] })) {
+    await navigator.share({ files: [file], title: w.comic || w.author || '次元壁纸' });
+    toast('保存完成', false, 2000);
+  } else {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    toast('已开始下载', false, 2000);
+  }
+}
+
+// APP 同款进度环: 细白圆环 + 白色饼扇区 (无底盘/无百分比文字, 不抢眼)
+function PieRing({ pct }: { pct: number }) {
+  const r = 22, c = 24;
+  const a0 = -Math.PI / 2, a1 = a0 + Math.PI * 2 * Math.min(1, Math.max(0, pct));
+  const x0 = c + r * Math.cos(a0), y0 = c + r * Math.sin(a0);
+  const x1 = c + r * Math.cos(a1), y1 = c + r * Math.sin(a1);
+  const large = pct > 0.5 ? 1 : 0;
+  const wedge = pct <= 0 ? '' : pct >= 0.999
+    ? `M ${c} ${c} m -${r} 0 a ${r} ${r} 0 1 0 ${r * 2} 0 a ${r} ${r} 0 1 0 -${r * 2} 0 Z`
+    : `M ${c} ${c} L ${x0} ${y0} A ${r} ${r} 0 ${large} 1 ${x1} ${y1} Z`;
+  return (
+    <div className="orig-ring" role="progressbar" aria-valuenow={Math.round(pct * 100)}>
+      <svg viewBox="0 0 48 48">
+        <circle cx={c} cy={c} r={r} fill="none" stroke="rgba(255,255,255,.9)" strokeWidth="1.4" />
+        {wedge && <path d={wedge} fill="rgba(255,255,255,.95)" />}
+      </svg>
+      <span className="sr-pct">{Math.round(pct * 100)}%</span>
+    </div>
+  );
+}
+
 export function ModalView() {
   useV();
   const w = state.modal;
@@ -44,6 +83,7 @@ export function ModalView() {
   const pinch = useRef<{ d0: number; s0: number; mx: number; my: number } | null>(null);
   const moved = useRef(false);
   const tapTimer = useRef<number | null>(null);
+  const armedRef = useRef(false);
 
   // 预取 (卡片 pointerdown / 弹窗打开即开始, orig.ts 单一 in-flight): 真实进度 → 小圆盘;
   // 完成后 blob 在手 → 下载一次点击即分享。
@@ -72,7 +112,20 @@ export function ModalView() {
         void downscaleForDisplay(blob).then((u) => { if (!cancelled) setOrigUrl(u || URL.createObjectURL(blob)); });
       }).catch(() => { if (!cancelled) setOrigState('error'); });
     }
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      // 加载中点过保存却关闭了弹窗: 加载完成后以带行动的 toast 承接 (点击=新手势, 合法拉起分享)
+      if (armedRef.current && !getCachedOrig(w.id)) {
+        const target = w;
+        ensureOrig(target).then((blob) => {
+          toast(`${target.comic || target.author || '壁纸'} 原图已就绪`, false, 9000, {
+            label: '保存',
+            fn: () => { shareBlob(target, blob).catch((e) => { if ((e as Error).name !== 'AbortError') toast('保存失败: ' + (e as Error).message, true); }); },
+          });
+        }).catch(() => { /* 失败不叨扰 */ });
+      }
+      armedRef.current = false;
+    };
   }, [w]);
   useEffect(() => () => { if (origUrl) URL.revokeObjectURL(origUrl); }, [origUrl]);
   useEffect(() => {
@@ -182,35 +235,21 @@ export function ModalView() {
   // 下载/保存三态: blob 在手 → 手势内分享; 加载中被点按 → 记住意图, 加载完自动尝试分享,
   // iOS 手势过期(NotAllowed)静默转"点按保存"脉冲态(平台限制, 不弹报错); 用户取消=静默;
   // share() resolve = 保存/分享动作完成 → 成功提示 (Web 端能监听到的最精确信号)。
-  const shareOrDownload = async (blob: Blob) => {
-    const name = `${w.comic || 'ciyuan'}_${w.id.slice(0, 8)}.webp`;
-    const file = new File([blob], name, { type: 'image/webp' });
-    if (navigator.canShare?.({ files: [file] })) {
-      await navigator.share({ files: [file], title: w.comic || w.author || '次元壁纸' });
-      toast('保存完成', false, 2000);
-    } else {
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = name;
-      document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 5000);
-      toast('已开始下载', false, 2000);
-    }
-  };
+  const shareOrDownload = (blob: Blob) => shareBlob(w, blob);
   const downloadOrig = async () => {
     let blob = getCachedOrig(w.id) || blobRef.current;
     if (!blob) {
-      setSaveArmed(true);
+      setSaveArmed(true); armedRef.current = true;
       try { blob = await ensureOrig(w); } catch (e) { setSaveArmed(false); setOrigState('error'); toast('下载失败: ' + (e as Error).message, true); return; }
     }
     try {
       await shareOrDownload(blob);
-      setSaveArmed(false);
+      setSaveArmed(false); armedRef.current = false;
       setOrigState('ready');
     } catch (e) {
       const err = e as Error;
-      if (err.name === 'AbortError') { setSaveArmed(false); return; }
-      if (err.name === 'NotAllowedError') { setSaveArmed(true); setOrigState('ready'); return; }
+      if (err.name === 'AbortError') { setSaveArmed(false); armedRef.current = false; return; }
+      if (err.name === 'NotAllowedError') { setSaveArmed(true); armedRef.current = false; setOrigState('ready'); return; }
       setSaveArmed(false);
       toast('保存失败: ' + err.message, true);
     }
@@ -251,15 +290,7 @@ export function ModalView() {
             alt={w.comic || w.author || '壁纸'}
             style={{ transform: `translate(${tf.x}px, ${tf.y}px) scale(${tf.s})` }}
           />
-          {syncing && prog && (
-            <div className="orig-ring" role="progressbar" aria-valuenow={Math.round(pct * 100)}>
-              <svg viewBox="0 0 40 40">
-                <circle className="ring-bg" cx="20" cy="20" r="17" />
-                <circle className="ring-fg" cx="20" cy="20" r="17" strokeDasharray={2 * Math.PI * 17} strokeDashoffset={2 * Math.PI * 17 * (1 - pct)} />
-              </svg>
-              <span className="sr-pct">{prog.total ? `${Math.round(pct * 100)}%` : '…'}</span>
-            </div>
-          )}
+          {syncing && prog && <PieRing pct={prog.total ? Math.min(1, prog.loaded / prog.total) : 0} />}
           {origState === 'error' && (
             <div className="orig-hint"><span className="dot" /><span>原图加载失败（点下载重试）</span></div>
           )}
@@ -299,7 +330,7 @@ export function ModalView() {
         <div className="side-actions">
           <button className={'btn btn-primary' + (saveArmed ? ' armed' : '')} onClick={() => void downloadOrig()}>
             {syncing
-              ? <>原图同步 {prog?.total ? Math.round(pct * 100) + '%' : '…'}</>
+              ? <>{saveArmed ? `保存中 ${prog?.total ? Math.round(pct * 100) + '%' : '…'}` : `原图同步 ${prog?.total ? Math.round(pct * 100) + '%' : '…'}`}</>
               : saveArmed
                 ? <><svg className="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m0 0 4-4m-4 4-4-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /><path d="M5 19h14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>原图已就绪 · 点按保存</>
                 : origState === 'error'

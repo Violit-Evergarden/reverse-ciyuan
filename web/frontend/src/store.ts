@@ -7,7 +7,7 @@ import { apiComics, apiRank, apiSearch, apiStatus, apiWallpapers, ApiError } fro
 import type { Comic, RankGroup, Scope, View, Wallpaper } from './types';
 
 interface Cache { pool: Wallpaper[]; seen: Set<string>; cursor: string | null; done: boolean }
-interface Toast { id: number; msg: string; err: boolean }
+interface Toast { id: number; msg: string; err: boolean; action?: { label: string; fn: () => void } }
 
 export const state = {
   view: 'home' as View,
@@ -70,8 +70,8 @@ export const visible = (w: Wallpaper) => !(state.hideR16 && w.isR16) && inScope(
 
 // ---------- toast ----------
 let toastId = 0;
-export function toast(msg: string, err = false, ms = 3200) {
-  const t = { id: ++toastId, msg, err };
+export function toast(msg: string, err = false, ms = 3200, action?: { label: string; fn: () => void }) {
+  const t = { id: ++toastId, msg, err, action };
   state.toasts.push(t); bump();
   setTimeout(() => { state.toasts = state.toasts.filter((x) => x.id !== t.id); bump(); }, ms);
 }
@@ -173,7 +173,7 @@ export const closeModal = () => {
   if (!state.modal) return;
   state.modal = null;
   if ((location.hash || '').includes('/w/')) history.back(); // hashchange → applyHash 收尾
-  requestAnimationFrame(() => window.scrollTo(0, savedScroll));
+  requestAnimationFrame(() => window.scrollTo({ top: savedScroll, behavior: 'instant' as ScrollBehavior }));
   bump();
 };
 let savedScroll = 0;
@@ -181,7 +181,9 @@ let savedScroll = 0;
 // ---------- 路由 ----------
 // 哈希格式: #/home | #/cats | #/rank | #/comic/<名> | #/uploader/<ID> | #/search/<词>,
 // 详情弹窗追加后缀 /w/<壁纸ID> (同文档历史条目, 侧滑零重载)。
+const viewScroll: Partial<Record<View, number>> = {};
 export function applyHash(h: string) {
+  const prevView = state.view;
   const wi = h.indexOf('/w/');
   const base = wi >= 0 ? h.slice(0, wi) : h;
   const wId = wi >= 0 ? h.slice(wi + 3) : null;
@@ -204,9 +206,16 @@ export function applyHash(h: string) {
     state.modal = null;
   }
   bump();
+  if (state.view !== prevView) {
+    viewScroll[prevView] = window.scrollY;          // 记录离开视图的滚动位
+    const target = viewScroll[state.view] || 0;
+    // 双 rAF: 等 React 提交+布局完成后再恢复, 否则文档高度不足滚动被钳到 0
+    requestAnimationFrame(() => requestAnimationFrame(() => window.scrollTo({ top: target, behavior: 'instant' as ScrollBehavior })));
+  }
 }
 
 // ---------- 启动 ----------
+history.scrollRestoration = 'manual'; // 滚动权收归应用: 禁止浏览器历史恢复覆盖视图级恢复
 state.cache = cacheFor(null);
 void apiStatus().then((j) => {
   if (!j.hasToken && !j.hasAccount) toast('后端未配置账号，仅排行可用', true, 5000);
