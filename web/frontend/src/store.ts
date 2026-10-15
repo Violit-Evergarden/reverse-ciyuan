@@ -131,6 +131,7 @@ export function onSearch(q: string) {
   state.query = t;
   if (state.view !== 'home') state.view = 'home';
   bump();
+  if (t) void expandForQuery();
   if (t && state.serverSearch === null) void probeServerSearch(t).then(() => {
     if (state.serverSearch && state.query) {
       const kw = state.query; state.query = '';
@@ -139,6 +140,27 @@ export function onSearch(q: string) {
   });
 }
 export function clearQuery() { state.query = ''; bump(); }
+
+// 搜索/标签过滤的作用域 = 全部已加载池的并集 (去重 + 按时间倒序):
+// "分类里点标签 → 去掉分类 chip" 时, 标签命中项仍留在已加载的分类池里, 不应凭空消失。
+export function searchPool(): Wallpaper[] {
+  if (!state.query) return state.cache.pool;
+  const seen = new Set<string>();
+  const out: Wallpaper[] = [];
+  for (const c of state.caches.values()) {
+    for (const w of c.pool) if (!seen.has(w.id)) { seen.add(w.id); out.push(w); }
+  }
+  return out.sort((a, b) => b.createdAt - a.createdAt);
+}
+
+// 池内过滤的覆盖率补偿: 结果太少时自动续载后续页 (稀有标签可能不在已加载池里)
+async function expandForQuery(min = 12, maxPages = 6) {
+  for (let i = 0; i < maxPages; i++) {
+    const c = state.cache;
+    if (c.done || searchPool().filter(visible).length >= min) break;
+    await fetchPage();
+  }
+}
 
 // ---------- 其他 views ----------
 export async function loadRank() {

@@ -11,10 +11,13 @@ const fmtDate = (ms: number) => {
 
 // 显示降采样: 超大原图 (如 2775×5551, 解码位图 ~60MB) 直接上屏会在移动端累积爆内存;
 // 先 canvas 降到 ≤2048px 再显示, 原 blob 仅留给分享/下载。失败回落原图 URL。
-// 显示上限 = 设备像素预算: 屏幕长边 × DPR (下限 2048) —— 再多像素屏幕也显示不出,
-// 却要吃数倍内存; 下载/分享始终是全分辨率原图 (故"保存的比显示的清晰"是预期且正确)。
-const displayCap = () => Math.max(2048, Math.round(Math.max(screen.width, screen.height) * (window.devicePixelRatio || 1)));
-async function downscaleForDisplay(blob: Blob, maxDim = displayCap()): Promise<string | null> {
+// 显示分辨率策略: 桌面默认全分辨率 (与安卓 APP 对齐, 内存充裕);
+// 移动端默认"设备像素预算" (屏幕长边×DPR, 下限 2048) 防大图爆内存, 可手动切全分辨率。
+// 下载/分享始终全分辨率原图, 不受显示策略影响。
+const isDesktop = () => window.matchMedia('(pointer: fine)').matches;
+const deviceBudget = () => Math.max(2048, Math.round(Math.max(screen.width, screen.height) * (window.devicePixelRatio || 1)));
+const displayCap = (fullRes: boolean) => (fullRes || isDesktop() ? 12288 : deviceBudget());
+async function downscaleForDisplay(blob: Blob, maxDim: number): Promise<string | null> {
   try {
     const bmp = await createImageBitmap(blob);
     try {
@@ -79,6 +82,7 @@ export function ModalView() {
   const [origUrl, setOrigUrl] = useState<string | null>(null);
   const [sheet, setSheet] = useState(false);            // 移动端信息/下载弹层
   const [saveArmed, setSaveArmed] = useState(false);    // 加载中点过保存 → 就绪后脉冲提示
+  const [fullRes, setFullRes] = useState(false);          // 移动端手动原图分辨率开关
   const [tf, setTf] = useState({ s: 1, x: 0, y: 0 });   // 缩放/平移
   const blobRef = useRef<Blob | null>(null);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -96,6 +100,7 @@ export function ModalView() {
     setProg(null);
     setSheet(false);
     setSaveArmed(false);
+    setFullRes(false);
     setTf({ s: 1, x: 0, y: 0 });
     setOrigUrl(null); // 杜绝背景残留上一张
     blobRef.current = null;
@@ -105,14 +110,14 @@ export function ModalView() {
       blobRef.current = cached;
       setProg({ loaded: cached.size, total: cached.size });
       setOrigState('ready');
-      void downscaleForDisplay(cached).then((u) => { if (!cancelled) setOrigUrl(u || URL.createObjectURL(cached)); });
+      void downscaleForDisplay(cached, displayCap(fullRes)).then((u) => { if (!cancelled) setOrigUrl(u || URL.createObjectURL(cached)); });
     } else {
       setOrigState('loading');
       ensureOrig(w, onProg).then((blob) => {
         if (cancelled) return;
         blobRef.current = blob;
         setOrigState('ready');
-        void downscaleForDisplay(blob).then((u) => { if (!cancelled) setOrigUrl(u || URL.createObjectURL(blob)); });
+        void downscaleForDisplay(blob, displayCap(fullRes)).then((u) => { if (!cancelled) setOrigUrl(u || URL.createObjectURL(blob)); });
       }).catch(() => { if (!cancelled) setOrigState('error'); });
     }
     return () => {
@@ -340,6 +345,17 @@ export function ModalView() {
             >{t}</button>
           ))}
         </div>
+        {!isDesktop() && origState === 'ready' && (
+          <button
+            className="linklike res-toggle"
+            onClick={() => {
+              const next = !fullRes;
+              setFullRes(next);
+              const blob = getCachedOrig(w.id) || blobRef.current;
+              if (blob) void downscaleForDisplay(blob, displayCap(next)).then((u) => setOrigUrl(u || URL.createObjectURL(blob)));
+            }}
+          >{fullRes ? '降回屏幕适配显示' : '显示原图分辨率（更耗内存）'}</button>
+        )}
         <div className="side-actions">
           <button className={'btn btn-primary' + (saveArmed ? ' armed' : '')} onClick={() => void downloadOrig()}>
             {syncing

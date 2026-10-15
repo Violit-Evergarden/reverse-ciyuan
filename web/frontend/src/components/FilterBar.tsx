@@ -1,8 +1,8 @@
-import { clearQuery, setScope, state, useV, visible } from '../store';
+import { clearQuery, setScope, searchPool, state, useV, visible } from '../store';
 
 export function FilterBar() {
   useV();
-  const pool = state.cache?.pool || [];
+  const pool = searchPool();
   const vis = pool.filter(visible).length;
   const chips: { k: 'scope' | 'query'; label: string; title: string }[] = [];
   if (state.scope) {

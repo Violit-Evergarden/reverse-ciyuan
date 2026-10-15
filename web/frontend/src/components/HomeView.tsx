@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { thumbOf } from '../api';
 import { cardH, distribute, masonrySpec } from '../masonry';
-import { fetchPage, openModal, state, useV, visible } from '../store';
+import { fetchPage, openModal, searchPool, state, useV, visible } from '../store';
 import { ensureOrig } from '../orig';
 import type { Wallpaper } from '../types';
 import { FilterBar } from './FilterBar';
@@ -61,7 +61,7 @@ export function HomeView() {
   const w = width || Math.max(320, window.innerWidth - 44);
   const { n, gap } = masonrySpec(w, window.innerWidth);
   const colW = (w - gap * (n - 1)) / n;
-  const items = useMemo(() => state.cache.pool.filter(visible), [state.cache, state.cache.pool.length, state.query, state.scope, state.hideR16]);
+  const items = searchPool().filter(visible); // 有搜索词时作用域=全部已加载池并集
   const cols = useMemo(
     () => distribute(items, (it) => cardH(it, colW, gap), n, gap),
     [items, n, colW, gap],
