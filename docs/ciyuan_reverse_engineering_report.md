@@ -408,6 +408,11 @@ systemd `ciyuan-web` → 127.0.0.1:8787; 入口 **https://www.violet37.cn**。
 - **mihomo(Clash)共存确认**: 仅 loopback 监听、无 tun 段/无 tun 设备/无代理环境变量/出口 IP=自身公网 IP →
   本站流量直连不经代理; Node 原生 http/https 不读 proxy 环境变量, 双重保险。若未来误开 TUN:
   `ip link | grep tun` + config `tun:` 段确认 → `tun.enable:false` 或对上游域名加 DIRECT 规则 → restart mihomo。
+- **fetch + FormData 默认发 multipart/form-data**: 服务端若只按 urlencoded 解析
+  (`new URLSearchParams(body)`) 会取不到字段 → 表单"密码永远错误"。门禁页曾因此全浏览器端 401
+  (验证只覆盖了 curl/urlencoded 与手搓 URLSearchParams, 漏了真实页面路径)。
+  修复双保险: 客户端改 `new URLSearchParams(new FormData(form))`; 服务端按 content-type
+  兼容解析 multipart。**教训: 表单类接口必须用真实页面路径做端到端验证, 不能只测 API 形状。**
 - 无头验证注意: CDP 网络限速**不作用于 loopback**, 测加载进度环等慢路径要用线上域名;
   `resize_page` 在窗口被系统夹小时失真, 用 `emulate viewport` 更可靠; 合成 PointerEvent 的
   `setPointerCapture` 会抛 NotFoundError(代码已 try/catch, 写测试时无需处理)。

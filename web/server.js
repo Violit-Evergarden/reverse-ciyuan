@@ -380,7 +380,7 @@ button{padding:12px;border-radius:10px;border:0;background:linear-gradient(135de
 // fetch 提交 + replace 跳转: 不在历史里留下门禁页/POST 条目, 移动端返回手势不会回到输入框
 document.querySelector('form').addEventListener('submit', async (e) => {
   e.preventDefault();
-  const r = await fetch('/gate', { method: 'POST', body: new FormData(e.target) });
+  const r = await fetch('/gate', { method: 'POST', body: new URLSearchParams(new FormData(e.target)) });
   if (r.redirected || r.ok) location.replace('/');
   else document.querySelector('.e').textContent = '密码不对: 注意大小写, 已自动忽略首尾空格与全角字符';
 });
@@ -413,7 +413,16 @@ const server = http.createServer(async (req, res) => {
     req.on('end', () => {
       // 容错: 复制粘贴常带尾空白/换行, 输入法易出全角 → trim + NFKC 归一后再比 (密码仍区分大小写)
       const norm = (x) => String(x || '').trim().normalize('NFKC');
-      const code = norm(new URLSearchParams(body).get('code'));
+      // 兼容两种编码: fetch+FormData 会发 multipart (浏览器表单默认), URLSearchParams 发 urlencoded
+      const ct = req.headers['content-type'] || '';
+      let raw = '';
+      if (ct.includes('multipart/form-data')) {
+        const m = /name="code"\r\n\r\n([\s\S]*?)\r\n--/.exec(body);
+        raw = m ? m[1] : '';
+      } else {
+        raw = new URLSearchParams(body).get('code') || '';
+      }
+      const code = norm(raw);
       if (SECRETS.gate && code === norm(SECRETS.gate)) {
         const exp = String(Date.now() + GATE_DAYS * 86400e3);
         res.writeHead(302, {
