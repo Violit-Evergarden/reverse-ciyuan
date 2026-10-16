@@ -6,6 +6,8 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 PORT="${PORT:-8799}"
 BASE="http://127.0.0.1:$PORT"
+# python3 在 Windows 是商店存根 (exit 49), 探测失败回退 python
+PY=python3; $PY -c '' >/dev/null 2>&1 || PY=python
 
 echo "== 语法 =="
 node --check web/server.js && echo "  server.js OK"
@@ -28,7 +30,7 @@ for _ in $(seq 1 40); do
 done
 
 # 门禁 cookie (secrets.gate 存在时)
-GATE=$(python3 -c "import json;print(json.load(open('web/secrets.local.json')).get('gate',''))")
+GATE=$($PY -c "import json;print(json.load(open('web/secrets.local.json')).get('gate',''))")
 CURLA=()
 if [ -n "$GATE" ]; then
   curl -sc /tmp/.cy_verify.jar -m 5 -d "code=$GATE" "$BASE/gate" >/dev/null
@@ -47,19 +49,19 @@ if [ -n "$GATE" ]; then
   chk "带 cookie 门禁 200" $?
 fi
 
-curl -sf -m 5 "${CURLA[@]+"${CURLA[@]}"}" "$BASE/api/status" | python3 -c 'import json,sys; sys.exit(0 if json.load(sys.stdin)["code"]==0 else 1)'
+curl -sf -m 5 "${CURLA[@]+"${CURLA[@]}"}" "$BASE/api/status" | $PY -c 'import json,sys; sys.exit(0 if json.load(sys.stdin)["code"]==0 else 1)'
 chk "status code=0" $?
 
-curl -sf -m 15 "${CURLA[@]+"${CURLA[@]}"}" "$BASE/api/rank" | python3 -c 'import json,sys; j=json.load(sys.stdin); sys.exit(0 if j["code"]==0 and len(j["data"]["items"])==4 else 1)'
+curl -sf -m 15 "${CURLA[@]+"${CURLA[@]}"}" "$BASE/api/rank" | $PY -c 'import json,sys; j=json.load(sys.stdin); sys.exit(0 if j["code"]==0 and len(j["data"]["items"])==4 else 1)'
 chk "rank 4 组" $?
 
-curl -sf -m 30 "${CURLA[@]+"${CURLA[@]}"}" "$BASE/api/wallpapers" | python3 -c '
+curl -sf -m 30 "${CURLA[@]+"${CURLA[@]}"}" "$BASE/api/wallpapers" | $PY -c '
 import json,sys
 j=json.load(sys.stdin); ws=j["wallpapers"]; ca=[int(w["createdAt"]) for w in ws]
 sys.exit(0 if j["code"]==0 and len(ws)==100 and all(ca[i]>=ca[i+1] for i in range(len(ca)-1)) else 1)'
 chk "wallpapers 100 条且 createdAt 降序" $?
 
-code=$(curl -s -m 30 "${CURLA[@]+"${CURLA[@]}"}" "$BASE/api/search?keyword=test" | python3 -c 'import json,sys; print(json.load(sys.stdin)["code"])')
+code=$(curl -s -m 30 "${CURLA[@]+"${CURLA[@]}"}" "$BASE/api/search?keyword=test" | $PY -c 'import json,sys; print(json.load(sys.stdin)["code"])')
 [ "$code" = "0" ] || [ "$code" = "-5" ]
 chk "search 透传 (0=Pro 可用 / -5=付费墙)" $?
 
