@@ -50,7 +50,8 @@
    - 推导:`key = raw[0] ^ 0x52`(明文首字节必为 `R`),再校验 `x[8:12]=='WEBP'` 且
      `struct.unpack('<I', x[4:8]) == len(x)-8`。
 4. 解码工具:`/tmp/ciyuan_decode_url.py`(单 url 或 `--all rank.json outdir/`)。
-   已解出示例:`/tmp/ciyuan_orig_0.webp`、`_1.webp`、`_2.webp`(均校验通过)。
+   解码示例曾存 `samples/ciyuan_orig_0/1/2.webp`(均校验通过),后因体积(合计 ~28MB)删除,
+   需要时用 `--all data/ciyuan_rank.json` 随时再生。
 
 > 结论:网页版若需原图,用 `url` + 浏览器 UA 下载后 XOR 解码;若只需展示,`thumbUrl`(webp)可直接用。
 
@@ -199,7 +200,7 @@ adb shell "nohup /data/local/tmp/frida-server-16 >/data/local/tmp/fs16.log 2>&1 
 |---|---|
 | `/tmp/ciyuan_rank.json` | ★ 排行接口 JSON(40 张壁纸元数据+URL) |
 | `/tmp/ciyuan_decode_url.py` | ★ 原图(url)下载+XOR 解码工具 |
-| `/tmp/ciyuan_orig_0/1/2.webp` | 解码后的原图示例(校验通过) |
+| `/tmp/ciyuan_orig_0/1/2.webp` | 解码后的原图示例(校验通过; 已删, 可用解码工具再生) |
 | `/tmp/ciyuan_sample_511bdb.webp` | 缩略图示例 |
 | `/tmp/ciyuan_channel_req.pb` / `_resp.pb` | /channel protobuf 请求/响应 |
 | `/tmp/ciyuan_rank_http2_req_frames.bin` / `_resp_frames.bin` | 排行会话 HTTP/2 明文帧 |
@@ -373,6 +374,9 @@ systemd `ciyuan-web` → 127.0.0.1:8787; 入口 **https://www.violet37.cn**。
 - `navigator.share` 必须紧贴用户手势: 现场 fetch 再 share 必失败 (Chrome "Must be handling a user
   gesture" / iOS "request not allowed"); 对策=卡片 pointerdown 预取 + 单飞 in-flight + 点击时 blob 在手
   手势内分享; iOS standalone 无下载 UI, `<a download>` 静默失败, 只能走分享面板。
+- **navigator.share 可用 ≠ 该用 (2026-10-16 修复)**: Windows/Android 上 `canShare({files})` 均为真,
+  "保存原图"会拉起系统分享面板而不是下载; 正解=只在 iOS (含 iPadOS 伪装 Mac: `platform==='MacIntel'`
+  且 `maxTouchPoints>1`) 走 share 代存图, 其余平台一律 `<a download>` 直下。
 - 门禁页必须 fetch 提交 + `location.replace`, 原生 form POST 会留历史条目 → 返回手势回密码框。
 - `pushState('')` 空 URL 条目在 iOS 侧滑触发整页重载 → 一律用哈希条目。
 - `setPointerCapture` 对合成/无效 pointerId 抛 NotFoundError → 整条手势链静默失效, 必须 try/catch。

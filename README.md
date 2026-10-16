@@ -39,14 +39,14 @@ reverse/
 │   ├── ciyuan_channel_page1_live_20261014.json  ★ 协议级客户端实时拉取的首页流(100条,签名复现验证)
 │   ├── raw_login/                 登录会话按连接分组的原始明文(login+channel+图片)
 │   ├── raw_rank/                  排行会话按连接分组的原始明文
-│   └── raw_page2/                 第 2 页(懒加载翻页)/channel 请求/响应 + 缩略图连接
+│   └── raw_page2/                 第 2 页(懒加载翻页)/channel 请求/响应 + 缩略图请求 (18MB 缩略图响应体已删, 需要时重抓)
 ├── web/                           ★★ 网页版(零 npm 依赖, Node≥18): server.js 协议网关 + public/ 单页前端
 │   ├── README.md                  启动/配置/API/边界说明
 │   └── secrets.local.json         账号/SALT/token (本地机密, .gitignore 不入库)
 └── samples/
-    ├── ciyuan_orig_0/1/2.webp     ★ XOR 解码后的原图(校验通过)
     ├── thumb_sample.webp          缩略图样例
     └── ui/                        关键界面截图(侧边栏/登录页/排行/登录后首页)
+    (原图样例不入库: 体积大且随时可用 tools/ciyuan_decode_url.py --all 再生)
 ```
 
 ---
