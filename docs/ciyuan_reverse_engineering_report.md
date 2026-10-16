@@ -420,6 +420,13 @@ systemd `ciyuan-web` → 127.0.0.1:8787; 入口 **https://www.violet37.cn**。
 - 无头验证注意: CDP 网络限速**不作用于 loopback**, 测加载进度环等慢路径要用线上域名;
   `resize_page` 在窗口被系统夹小时失真, 用 `emulate viewport` 更可靠; 合成 PointerEvent 的
   `setPointerCapture` 会抛 NotFoundError(代码已 try/catch, 写测试时无需处理)。
+- **Windows 开发机部署闭环 (2026-10-16 实测)**: ① 本机新钥匙不在服务器 authorized_keys 时,
+  走腾讯云控制台 → 轻量服务器 → 「登录」(OrcaTerm, 免密 TAT, 用户 ubuntu) 开 WebShell,
+  `sudo tee -a /root/.ssh/authorized_keys` 登记本机公钥 (浏览器 MCP 可全程代办);
+  ② Windows Git Bash 无 rsync → deploy.sh 已内置 tar-over-ssh 新目录+原子换名回退;
+  ③ `python3` 是商店存根 (exit 49) → 脚本探测失败自动回退 `python`; 且 Windows 原生 python
+  不认 MSYS `/d/..` 绝对路径, 脚本内一律 cd 后用相对路径; ④ GitHub push 走本机代理 7890:
+  `git -c http.proxy=http://127.0.0.1:7890 push`。
 
 ### 11.2 详情弹窗重构教训 (2026-10-15)
 - **跨生命周期的用户意图不能挂在组件上**:"加载中点保存"的意图曾挂在弹窗 effect cleanup 里,

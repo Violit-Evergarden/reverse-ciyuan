@@ -5,3 +5,4 @@ data/raw_login/
 web/dist/
 web/frontend/node_modules/
 web/deploy.local.json
+.playwright-mcp/
