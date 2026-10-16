@@ -7,9 +7,11 @@
 #   "新目录+原子换名" (等效 --delete, 旧内容哈希 assets 不堆积), 单文件走 cat 管道。
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-CFG="$ROOT/web/deploy.local.json"
-# python3 在 Windows 是商店存根 (exit 49), 探测失败回退 python
+cd "$ROOT"
+# python3 在 Windows 是商店存根 (exit 49), 探测失败回退 python;
+# 且 Windows 原生 python 不认 MSYS 绝对路径 (/d/...), 故 cd 后一律用相对路径
 PY=python3; $PY -c '' >/dev/null 2>&1 || PY=python
+CFG="web/deploy.local.json"
 if [ -f "$CFG" ]; then
   TARGET="${1:-$($PY -c "import json;print(json.load(open('$CFG'))['target'])")}"
   DOMAIN="${2:-$($PY -c "import json;print(json.load(open('$CFG'))['domain'])")}"
